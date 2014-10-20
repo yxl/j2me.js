@@ -613,6 +613,10 @@ Native.create("com/sun/cldc/io/ResourceInputStream.readBytes.(Ljava/lang/Object;
     return (len > 0) ? len : -1;
 });
 
+Native.create("com/sun/cldc/io/ResourceInputStream.clone.(Ljava/lang/Object;)Ljava/lang/Object;", function(source) {
+    return source;
+});
+
 Native.create("com/sun/cldc/i18n/uclc/DefaultCaseConverter.toLowerCase.(C)C", function(char) {
     return String.fromCharCode(char).toLowerCase().charCodeAt(0);
 });

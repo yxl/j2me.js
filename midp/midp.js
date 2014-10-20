@@ -1279,6 +1279,11 @@ Native.create("com/nokia/mid/ui/gestures/GestureInteractiveZone.isSupported.(I)Z
     return false;
 });
 
+Native.create("com/nokia/mid/ui/gestures/GestureInteractiveZone.getGestures.()I", function() {
+    console.warn("GestureInteractiveZone.getGestures.()Z not implemented");
+    return 0;
+});
+
 Native.create("com/sun/midp/security/SecurityHandler.checkPermission0.(II)Z", function(suiteId, permission) {
     return true;
 });
