@@ -9,7 +9,7 @@ VM.Yield = {};
 VM.Pause = {};
 
 VM.DEBUG = false;
-VM.DEBUG_PRINT_ALL_EXCEPTIONS = false;
+VM.DEBUG_PRINT_ALL_EXCEPTIONS = true;
 
 VM.traceLog = "";
 VM.trace = function(type, pid, methodInfo, returnVal) {

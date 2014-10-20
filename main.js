@@ -191,6 +191,7 @@ window.onload = function() {
    VM.DEBUG = !VM.DEBUG;
    toggle(this);
  };
+ toggle(document.getElementById("printAllExceptions"));
  document.getElementById("printAllExceptions").onclick = function() {
    VM.DEBUG_PRINT_ALL_EXCEPTIONS = !VM.DEBUG_PRINT_ALL_EXCEPTIONS;
    toggle(this);
