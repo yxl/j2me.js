@@ -1,7 +1,7 @@
 {
-  "name": "j2me.js",
-  "description": "j2me interpreter for firefox os",
-  "launch_path": "/index.html?autosize=1&logConsole=web",
+  "name": "WeChat",
+  "description": "WeChat for firefox os",
+  "launch_path": "/index.html?main=com/sun/midp/main/MIDletSuiteLoader&jars=AshaWeChat.jar&midletClassName=com.tencent.mm.ui.WeChat&autosize=1&platform=Nokia311&logConsole=web&jad=AshaWeChat.jad",
   "origin": "app://j2mejs.mozilla.org",
   "icons": {
     "128": "/img/icon-128.png"
