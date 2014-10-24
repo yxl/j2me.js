@@ -4,7 +4,7 @@
 'use strict';
 
 var MIDlet = {
-  name: "aMIDlet",
+  name: "WeChat",
 
   SMSDialogVerificationText: "This app sent you an SMS. Type the message you received here:",
   SMSDialogTimeout: 300000, // Five minutes
@@ -18,7 +18,11 @@ var MIDlet = {
 
 var config = {
   main: "com/sun/midp/main/MIDletSuiteLoader",
-  midletClassName: "RunTests",
+  downloadJAD: "http://dldir1.qq.com/foxmail/AshaWeChat.jad",
+  midletClassName: "com.tencent.mm.ui.WeChat",
+  platform: "Nokia311",
+  autosize: 1,
+  logConsole: "web",
 };
 
 // The base directory of the app, relative to the current page.  Normally this

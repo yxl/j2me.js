@@ -1,10 +1,12 @@
 {
-  "name": "j2me.js",
-  "description": "j2me interpreter for firefox os",
+  "name": "j2me.js-wc",
+  "description": "J2ME Emulator",
   "launch_path": "/index.html",
-  "origin": "app://j2mejs.mozilla.org",
+  "origin": "app://wechatinj2mejs.mozilla.org",
+  "version": "1.0",
   "icons": {
-    "128": "/img/icon-128.png"
+    "128": "/img/icon-128.png",
+    "512": "/img/icon-512.png"
   },
   "developer": {
     "name": "Mozilla",
