@@ -86,6 +86,10 @@ Media.supportedImageFormats = ["JPEG", "PNG"];
 Media.EVENT_MEDIA_END_OF_MEDIA = 1;
 Media.EVENT_MEDIA_SNAPSHOT_FINISHED = 11;
 
+Media.isFirefoxOS = function() {
+    return !!navigator.mozApps && navigator.userAgent.search("Mobile") !== -1;
+};
+
 Media.convert3gpToAmr = function(inBuffer) {
     // The buffer to store the converted amr file.
     var outBuffer = new Uint8Array(inBuffer.length);
@@ -230,6 +234,11 @@ AudioPlayer.prototype.start = function() {
     new Promise(function(resolve, reject) {
         var blob = new Blob([ this.playerContainer.data.subarray(0, this.playerContainer.contentSize) ],
                             { type: this.playerContainer.contentType });
+        if (!Media.isFirefoxOS() && this.playerContainer.mediaFormat == 'amr') {
+            var data = this.playerContainer.data.subarray(0, this.playerContainer.contentSize);
+            data = AMR.toWAV(data);
+            blob = new Blob([ data ], { type: "audio/x-wav" });
+        }
         this.audio.src = URL.createObjectURL(blob);
         this.audio.onloadedmetadata = function() {
             resolve();
