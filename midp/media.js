@@ -15,6 +15,7 @@ Media.ContentTypes = {
         "audio/mpeg",
         "image/jpeg",
         "image/png",
+        "audio/amr"
     ],
 
     http: [
@@ -22,6 +23,7 @@ Media.ContentTypes = {
         "audio/mpeg",
         "image/jpeg",
         "image/png",
+        "audio/amr"
     ],
 
     https: [
@@ -29,6 +31,7 @@ Media.ContentTypes = {
         "audio/mpeg",
         "image/jpeg",
         "image/png",
+        "audio/amr"
     ],
 
     rtp: [],
@@ -288,6 +291,14 @@ AudioPlayer.prototype.cloneBuffer = function() {
 };
 
 AudioPlayer.prototype.decode = function(encoded, callback) {
+    switch (this.playerContainer.mediaFormat) {
+        case "amr":
+            var samples = AMR.decode(encoded);
+            var audioBuffer = this.audioContext.createBuffer(1, samples.length, 8000);
+            audioBuffer.copyToChannel(samples, 0, 0);
+            callback(audioBuffer);
+            return;
+    }
     this.audioContext.decodeAudioData(encoded.buffer, callback);
 };
 

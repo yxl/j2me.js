@@ -278,3 +278,13 @@ limitations under the License.
 * You may use/modify for any non-commercial purpose
 *-------------------------------------------------*/
 // Source: http://www.java2s.com/Code/Java/J2ME/ImmutableImageFromByteArray.htm
+
+lib/amrnb.js: Apache License Version 2.0
+
+This file is a copy of `js/amrnb.js` from opencore-arm-js library
+(https://github.com/yxl/opencore-amr-js).
+
+This library is Licensed under the Apache License, Version 2.0. A copy could be
+found at
+
+http://www.apache.org/licenses/LICENSE-2.0.html
