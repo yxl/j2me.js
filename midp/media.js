@@ -817,6 +817,11 @@ AudioRecorder.prototype.stop = function() {
             // make sense to concatenate them like the socket, so let just override
             // the buffered data here.
             var data = new Uint8Array(message.data);
+            if (!Media.isFirefoxOS()) {
+                this.data = new Uint8Array(message.data);
+                resolve(1);
+                return;
+            }
             if (this.getContentType() === "audio/amr") {
                 data = Media.convert3gpToAmr(data);
             }
