@@ -245,6 +245,104 @@ DumbPipe.registerOpener("socket", function(message, sender) {
   };
 });
 
+// Wrap MediaRecorder, return amr instead.
+(function() {
+    var _mozMediaRecorder = MediaRecorder;
+
+    /**
+     * Convert normal array in Ogg format into array buffer in Amr format.
+     *
+     * What we do here includes:
+     *  - Get recorded array buffer from normal array.
+     *  - Get array buffer in PCM format by Web Audio API
+     *  - Encode the buffer in PCM format into buffer in AMR format
+     */
+    function convertOggToAmr(arrayBuffer) {
+        return new Promise(function(resolve, reject) {
+            // Get PCM buffer
+            var audioContext = new AudioContext();
+            audioContext.decodeAudioData(arrayBuffer, function(audioBuffer) {
+                var pcmBuffer = new Float32Array(audioBuffer.length);
+                audioBuffer.copyFromChannel(pcmBuffer, 0, 0);
+                resolve(AMR.encode(pcmBuffer, audioBuffer.sampleRate));
+            }, function() {
+                reject(new Error("Error occurs when decoding."));
+            });
+        });
+    }
+
+    MediaRecorder = function (aStream, aOption) {
+        this._mediaRecorder = new _mozMediaRecorder(aStream, aOption);
+
+        var self = this;
+        ['onpause', 'onstart', 'onerror', 'onstop'].forEach(function(evtHandleName) {
+            self._mediaRecorder[evtHandleName] = function(e) {
+                var name = this;
+                if (typeof self[name] == 'function') {
+                    self[name](e);
+                }
+            }.bind(evtHandleName);
+        });
+
+        this._mediaRecorder.ondataavailable = function(e) {
+            if (typeof this.ondataavailable != 'function') {
+                return;
+            }
+
+            // convert into amr
+            if (e.data.size == 0) {
+                return;
+            }
+
+            var fileReader = new FileReader();
+            fileReader.onload = function() {
+                if (fileReader.result.byteLength == 0) {
+                    return;
+                }
+
+                convertOggToAmr(fileReader.result).then(function(amrBuffer) {
+                    // Construct a blob, and relay it to the real callback.
+                    self.ondataavailable({
+                        data: new Blob([amrBuffer.buffer])
+                    });
+                }, function() {
+                    // XXX Cannot decode the second-received data, don't know why, :(
+                    self.ondataavailable(e);
+                });
+            };
+
+            fileReader.readAsArrayBuffer(e.data);
+        }.bind(this);
+    };
+
+    MediaRecorder.prototype = {
+        start: function MR_start() {
+            console.log("start");
+            this._mediaRecorder.start();
+        },
+
+        requestData: function MR_requstData() {
+            console.log("requestData");
+            this._mediaRecorder.requestData();
+        },
+
+        resume: function MR_resume() {
+            console.log("resume");
+            this._mediaRecorder.resume();
+        },
+
+        pause: function MR_pause() {
+            console.log("pause");
+            this._mediaRecorder.pause();
+        },
+
+        stop: function MR_stop() {
+            console.log("stop");
+            this._mediaRecorder.stop();
+        }
+    };
+})();
+
 DumbPipe.registerOpener("audiorecorder", function(message, sender) {
     var mediaRecorder = null;
     var localAudioStream = null;
