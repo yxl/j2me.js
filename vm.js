@@ -192,6 +192,25 @@ function throw_(ex, ctx) {
     }
 }
 
+var keys = {
+  "ct.b.(Ljava/lang/String;)V": false,  // base.setText
+  "bv.b.(Ljava/lang/String;)V": { 1: "S" },  // setText
+  "bv.b.(Lcc;)V": false, // paint
+  "bv.a.([Ljava/lang/String;Lbx;)V": {
+    0: "[S",
+    breaks: {
+      1: true
+    }
+  },
+  "bw.a.(IILjava/lang/String;)V": {
+    trace: true,
+    3: "S",
+    breaks: {
+      19: true
+    }
+  }
+};
+
 VM.execute = function(ctx) {
     var frame = ctx.current();
 
@@ -208,6 +227,18 @@ VM.execute = function(ctx) {
     var stack = frame.stack;
 
     while (true) {
+        var k = frame.methodInfo.implKey;
+        var c = frame.methodInfo.classInfo.className;
+        if (keys[k]) {
+          if (keys[k].trace) {
+            console.warn("=== " + k + " " + frame.ip);
+          }
+          if (keys[k].breaks && keys[k].breaks[frame.ip]) {
+            console.warn("=== " + k + " break at " + frame.ip);
+            debugger;
+          }
+        }
+
         var op = frame.read8();
         switch (op) {
         case 0x00: // nop
@@ -1081,7 +1112,41 @@ VM.execute = function(ctx) {
             }
             Instrument.callResumeHooks(frame);
 
+            var printStackTrace = function() {
+                // print stacktrace
+                ctx.frames.forEach(function(f) {
+                    console.log("!!!! - " + f.methodInfo.implKey);
+                });
+            };
+
             frame = pushFrame(ctx, methodInfo);
+            var k = frame.methodInfo.implKey;
+            var c = frame.methodInfo.classInfo.className;
+            if (k in keys) {
+              var args = "";
+              if (keys[k]) {
+                for (var i in keys[k]) {
+                  if (isNaN(parseInt(i))) {
+                    continue;
+                  }
+                  var arg = stack[i];
+                  switch (keys[k][i]) {
+                    case "S":
+                      arg = util.fromJavaString(arg);
+                      break;
+                    case "[S":
+                      var t = "";
+                      for (var a in arg) {
+                        t += util.fromJavaString(arg[a]);
+                      }
+                      arg = t;
+                      break;
+                  }
+                  args += " " + arg;
+                }
+              }
+              console.info("=== " + k + args);
+            }
 
             if (methodInfo.compiled) {
               frame = methodInfo.compiled(ctx);

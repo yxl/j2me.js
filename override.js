@@ -316,3 +316,13 @@ Override.create("com/sun/midp/security/Permissions.getId.(Ljava/lang/String;)I",
 Override.create("com/sun/midp/security/Permissions.getName.(I)Ljava/lang/String;", function(id) {
   return "com.sun.midp";
 });
+
+/*
+Override.create("com/tencent/mm/ui/d.j.(Ljava/lang/String;)V", function(str) {
+  console.error("com/tencent/mm/ui/d.j.(" + util.fromJavaString(str) + ")V");
+  return;
+});
+Override.create("ct.b.(Ljava/lang/String;)V", function(str) {
+  console.error("ct.b.(" + util.fromJavaString(str) + ")V");
+  return;
+});*/
