@@ -3,6 +3,9 @@ package com.nokia.mid.ui.lcdui;
 import javax.microedition.lcdui.Display;
 import com.nokia.mid.ui.lcdui.DisplayStateListener;
 
+import javax.microedition.lcdui.Display;
+import javax.microedition.lcdui.Displayable;
+
 public class LCDUIUtils {
     static java.lang.Object getObjectTrait(java.lang.Object target, java.lang.String traitName) {
         System.out.println("LCDUIUtils::getObjectTrait(Object,String) not implemented");
@@ -22,4 +25,9 @@ public class LCDUIUtils {
     static void setDisplayStateListener(Display display, DisplayStateListener listener) {
         System.out.println("LCDUIUtils::setDisplayStateListener(Dispay,DisplayStateListener) not implemented");
     }
+
+    static void setCurrent(Display display, Displayable displayable, String str) {
+        System.out.println("LCDUIUtil::setCurrent no implemente.");
+    }
+
 }
