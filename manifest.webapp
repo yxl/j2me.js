@@ -1,5 +1,5 @@
 {
-  "name": "j2me.js",
+  "name": "j2me.js-wc",
   "description": "J2ME Emulator",
   "launch_path": "/index.html",
   "origin": "app://wechatinj2mejs.mozilla.org",
