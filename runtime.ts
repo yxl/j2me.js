@@ -592,9 +592,72 @@ module J2ME {
     Pausing = 2
   }
 
+  /** @const */ export var MAX_PRIORITY: number = 10;
+  /** @const */ export var MIN_PRIORITY: number = 1;
+  /** @const */ export var NORMAL_PRIORITY: number = 5;
+
+  class PriorityQueue {
+    private _top: number;
+    private _queues: Context[][];
+
+    constructor() {
+      this._top = MIN_PRIORITY;
+      this._queues = [];
+      for (var i = MIN_PRIORITY; i <= MAX_PRIORITY; i++) {
+        this._queues[i] = [];
+      }
+    }
+
+    enqueue(ctx: Context) {
+      var priority = ctx.getPriority();
+      release || assert(priority >= MIN_PRIORITY && priority <= MAX_PRIORITY,
+                        "Invalid priority: " + priority);
+      this._queues[priority].push(ctx);
+      this._top = Math.max(priority, this._top);
+    }
+
+    dequeue(): Context {
+      if (this.isEmpty()) {
+        return null;
+      }
+      var ctx = this._queues[this._top].shift();
+      while (this._queues[this._top].length === 0 && this._top > MIN_PRIORITY) {
+        this._top--;
+      }
+      return ctx;
+    }
+
+    isEmpty() {
+      return this._top === MIN_PRIORITY && this._queues[this._top].length === 0;
+    }
+  }
+
   export class Runtime extends RuntimeTemplate {
     private static _nextId: number = 0;
+    private _runningQueue: PriorityQueue = new PriorityQueue();
+
     id: number;
+
+    scheduleRunningContext(ctx: Context) {
+      var isEmpty = this._runningQueue.isEmpty();
+      this._runningQueue.enqueue(ctx);
+      if (isEmpty) {
+        this.processRunningQueue();
+      }
+    }
+
+    private processRunningQueue() {
+      (<any>window).setZeroTimeout(function() {
+        try {
+          this._runningQueue.dequeue().execute();
+        } catch (e) {
+          // Suppress the exception.
+        }
+        if (!this._runningQueue.isEmpty()) {
+          this.processRunningQueue();;
+        }
+      }.bind(this));
+    }
 
     /**
      * Bailout callback whenever a JIT frame is unwound.
@@ -754,6 +817,7 @@ module J2ME {
     export interface Thread extends java.lang.Object {
       pid: number;
       alive: boolean;
+      $priority: number;
     }
 
     export interface Exception extends java.lang.Object {
