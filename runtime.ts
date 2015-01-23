@@ -388,6 +388,7 @@ module J2ME {
     classObjects: any;
     classInitLockObjects: any;
     ctx: Context;
+    ctxList: Set<Context>;
 
     isolate: com.sun.cldc.isolate.Isolate;
     mainThread: java.lang.Thread;
@@ -406,6 +407,7 @@ module J2ME {
       this.staticFields = {};
       this.classObjects = {};
       this.ctx = null;
+      this.ctxList = new Set();
       this.classInitLockObjects = {};
       this._runtimeId = RuntimeTemplate._nextRuntimeId ++;
       this._nextHashCode = this._runtimeId << 24;
@@ -442,6 +444,7 @@ module J2ME {
     addContext(ctx) {
       ++this.threadCount;
       RuntimeTemplate.all.add(this);
+      this.ctxList.add(ctx);
     }
 
     removeContext(ctx) {
@@ -449,6 +452,7 @@ module J2ME {
         RuntimeTemplate.all.delete(this);
         this.updateStatus(RuntimeStatus.Stopped);
       }
+      this.ctxList.delete(ctx);
     }
 
     newStringConstant(s: string): java.lang.String {
