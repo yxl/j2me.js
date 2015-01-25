@@ -284,14 +284,18 @@ Native["com/sun/javame/sensor/NativeSensor.doFinishSensor.(I)Z"] = function(numb
 };
 
 Native["com/sun/javame/sensor/NativeChannel.doMeasureData.(II)[B"] = function(sensorNumber, channelNumber) {
-    if (sensorNumber !== 0 || channelNumber < 0 || channelNumber >= 3) {
-        if (sensorNumber !== 0) {
-            console.error("Invalid sensor number: " + sensorsNumber);
-        } else {
-            console.error("Invalid channel number: " + channelNumber);
+    asyncImpl("[B", new Promise(function(resolve, reject) {
+        var result;
+        if (sensorNumber !== 0 || channelNumber < 0 || channelNumber >= 3) {
+            if (sensorNumber !== 0) {
+                console.error("Invalid sensor number: " + sensorsNumber);
+            } else {
+                console.error("Invalid channel number: " + channelNumber);
+            }
+            result = util.newPrimitiveArray("B", 0);
         }
-        return util.newPrimitiveArray("B", 0);
-    }
-
-    return AccelerometerSensor.readBuffer(channelNumber);
+        result = AccelerometerSensor.readBuffer(channelNumber);
+        // Result the result with a delay to avoid blocking the main thread.
+        setTimeout(resolve.bind(null, result), 100);
+    }));
 };

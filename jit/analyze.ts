@@ -24,6 +24,7 @@ module J2ME {
    * at the right spots.
    */
   export var yieldMap = {
+    "com/sun/javame/sensor/NativeChannel.doMeasureData.(II)[B": YieldReason.Root,
     "java/lang/Thread.sleep.(J)V": YieldReason.Root,
     "com/sun/cldc/isolate/Isolate.waitStatus.(I)V": YieldReason.Root,
     "com/sun/j2me/location/PlatformLocationProvider.waitForNewLocation.(IJ)Z": YieldReason.Root,

@@ -13,6 +13,8 @@
     // no time argument (always zero) and no arguments (you have to
     // use a closure).
     function setZeroTimeout(fn) {
+        Promise.resolve().then(fn);
+        return;
         timeouts.push(fn);
         window.postMessage(messageName, "*");
     }

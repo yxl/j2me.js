@@ -347,7 +347,7 @@ class Thread implements Runnable {
      */
     public final synchronized void join() throws InterruptedException {
         while (isAlive()) {
-            wait(1000);
+            wait(10);
         }
     }
 

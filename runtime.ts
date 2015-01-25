@@ -634,29 +634,29 @@ module J2ME {
 
   export class Runtime extends RuntimeTemplate {
     private static _nextId: number = 0;
-    private _runningQueue: PriorityQueue = new PriorityQueue();
+    private static _runningQueue: PriorityQueue = new PriorityQueue();
 
     id: number;
 
-    scheduleRunningContext(ctx: Context) {
-      var isEmpty = this._runningQueue.isEmpty();
-      this._runningQueue.enqueue(ctx);
+    static scheduleRunningContext(ctx: Context) {
+      var isEmpty = Runtime._runningQueue.isEmpty();
+      Runtime._runningQueue.enqueue(ctx);
       if (isEmpty) {
-        this.processRunningQueue();
+        Runtime.processRunningQueue();
       }
     }
 
-    private processRunningQueue() {
+    private static processRunningQueue() {
       (<any>window).setZeroTimeout(function() {
         try {
-          this._runningQueue.dequeue().execute();
+          Runtime._runningQueue.dequeue().execute();
         } catch (e) {
           // Suppress the exception.
         }
-        if (!this._runningQueue.isEmpty()) {
-          this.processRunningQueue();;
+        if (!Runtime._runningQueue.isEmpty()) {
+          Runtime.processRunningQueue();;
         }
-      }.bind(this));
+      });
     }
 
     /**

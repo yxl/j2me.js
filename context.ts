@@ -580,7 +580,7 @@ module J2ME {
     }
 
     resume() {
-      this.runtime.scheduleRunningContext(this);
+      Runtime.scheduleRunningContext(this);
     }
 
     block(obj, queue, lockLevel) {
