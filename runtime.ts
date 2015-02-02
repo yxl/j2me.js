@@ -14,6 +14,15 @@ declare var Long: {
   fromNumber(value: number);
 }
 
+interface Promise {
+  catch(onRejected: { (reason: any): any; }): Promise;
+}
+
+interface CompiledMethodCache {
+  get(key: string): { key: string; source: string; referencedClasses: string[]; };
+  put(obj: { key: string; source: string; referencedClasses: string[]; }): Promise;
+}
+
 declare var throwHelper;
 declare var throwPause;
 declare var throwYield;
@@ -22,8 +31,27 @@ module J2ME {
   declare var Native, Override;
   declare var VM;
   declare var Instrument;
+  declare var CompiledMethodCache;
 
+  /**
+   * Turns on just-in-time compilation of methods.
+   */
   export var enableRuntimeCompilation = true;
+
+  /**
+   * Turns on onStackReplacement
+   */
+  export var enableOnStackReplacement = true;
+
+  /**
+   * Turns on caching of JIT-compiled methods.
+   */
+  export var enableCompiledMethodCache = true && typeof CompiledMethodCache !== "undefined";
+
+  /**
+   * Enables more compact mangled names. This helps reduce code size but may cause naming collisions.
+   */
+  var hashedMangledNames = false;
 
   /**
    * Traces method execution.
@@ -60,6 +88,10 @@ module J2ME {
    */
   export var initWriter = null;
 
+  /**
+   * Traces generated code.
+   */
+  export var codeWriter = null;
 
   export enum MethodState {
     /**
@@ -89,6 +121,7 @@ module J2ME {
 
   export var timeline;
   export var methodTimeline;
+  export var threadTimeline;
   export var nativeCounter = new Metrics.Counter(true);
   export var runtimeCounter = new Metrics.Counter(true);
   export var baselineMethodCounter = new Metrics.Counter(true);
@@ -100,6 +133,7 @@ module J2ME {
   if (typeof Shumway !== "undefined") {
     timeline = new Shumway.Tools.Profiler.TimelineBuffer("Runtime");
     methodTimeline = new Shumway.Tools.Profiler.TimelineBuffer("Methods");
+    threadTimeline = new Shumway.Tools.Profiler.TimelineBuffer("Threads");
   }
 
   export function enterTimeline(name: string, data?: any) {
@@ -226,6 +260,8 @@ module J2ME {
   declare var util;
 
   import assert = J2ME.Debug.assert;
+  import concat3 = StringUtilities.concat3;
+  import concat5 = StringUtilities.concat5;
 
   export enum RuntimeStatus {
     New       = 1,
@@ -240,7 +276,10 @@ module J2ME {
     Compiled
   }
 
+  var hashMap = Object.create(null);
+
   var hashArray = new Int32Array(1024);
+
   function hashString(s: string) {
     if (hashArray.length < s.length) {
       hashArray = new Int32Array((hashArray.length * 2 / 3) | 0);
@@ -249,11 +288,17 @@ module J2ME {
     for (var i = 0; i < s.length; i++) {
       data[i] = s.charCodeAt(i);
     }
-    return HashUtilities.hashBytesTo32BitsAdler(data, 0, s.length);
+    var hash = HashUtilities.hashBytesTo32BitsMurmur(data, 0, s.length);
+
+    if (!release) { // Check to see that no collisions have ever happened.
+      if (hashMap[hash] && hashMap[hash] !== s) {
+        assert(false, "This is very bad.")
+      }
+      hashMap[hash] = s;
+    }
+
+    return hash;
   }
-
-  var friendlyMangledNames = true;
-
 
   function isIdentifierChar(c: number): boolean {
     return (c >= 97   && c <= 122)   || // a .. z
@@ -318,58 +363,55 @@ module J2ME {
   var stringHashes = Object.create(null);
   var stringHashCount = 0;
 
+  function hashStringStrong(s): string {
+    // Hash with Murmur hash.
+    var result = StringUtilities.variableLengthEncodeInt32(hashString(s));
+    // Also use the length for some more precision.
+    result += StringUtilities.toEncoding(s.length & 0x3f);
+    return result;
+  }
+
   export function hashStringToString(s: string) {
     if (stringHashCount > 1024) {
-      return StringUtilities.variableLengthEncodeInt32(hashString(s));
+      return hashStringStrong(s);
     }
     var c = stringHashes[s];
     if (c) {
       return c;
     }
-    c = stringHashes[s] = StringUtilities.variableLengthEncodeInt32(hashString(s));
+    c = stringHashes[s] = hashStringStrong(s);
     stringHashCount ++;
     return c;
   }
 
   export function mangleClassAndMethod(methodInfo: MethodInfo) {
-    var name = methodInfo.classInfo.className + "_" + methodInfo.name + "_" + hashStringToString(methodInfo.signature);
-    if (friendlyMangledNames) {
+    var name = concat5(methodInfo.classInfo.className, "_", methodInfo.name, "_", hashStringToString(methodInfo.signature));
+    if (!hashedMangledNames) {
       return escapeString(name);
     }
-    var hash = hashString(name);
-    return StringUtilities.variableLengthEncodeInt32(hash);
+    return hashStringToString(name);
   }
 
   export function mangleMethod(methodInfo: MethodInfo) {
-    var name = methodInfo.name + "_" + hashStringToString(methodInfo.signature);
-    if (friendlyMangledNames) {
+    var name = concat3(methodInfo.name, "_", hashStringToString(methodInfo.signature));
+    if (!hashedMangledNames) {
       return escapeString(name);
     }
-    var hash = hashString(name);
-    return StringUtilities.variableLengthEncodeInt32(hash);
+    return "$" + hashStringToString(name);
+  }
+
+  export function mangleClassName(name: string): string {
+    if (!hashedMangledNames) {
+      return "$" + escapeString(name);
+    }
+    return "$" + hashStringToString(name);
   }
 
   export function mangleClass(classInfo: ClassInfo) {
-    if (classInfo instanceof PrimitiveArrayClassInfo) {
-      switch (classInfo) {
-        case PrimitiveArrayClassInfo.Z: return "Uint8Array";
-        case PrimitiveArrayClassInfo.C: return "Uint16Array";
-        case PrimitiveArrayClassInfo.F: return "Float32Array";
-        case PrimitiveArrayClassInfo.D: return "Float64Array";
-        case PrimitiveArrayClassInfo.B: return "Int8Array";
-        case PrimitiveArrayClassInfo.S: return "Int16Array";
-        case PrimitiveArrayClassInfo.I: return "Int32Array";
-        case PrimitiveArrayClassInfo.J: return "Int64Array";
-      }
-    } else if (classInfo.isArrayClass) {
-      return "$AK(" + mangleClass(classInfo.elementClass) + ")";
-    } else {
-      if (friendlyMangledNames) {
-        return "$" + escapeString(classInfo.className);
-      }
-      var hash = hashString(classInfo.className);
-      return "$" + StringUtilities.variableLengthEncodeInt32(hash);
+    if (classInfo.mangledName) {
+      return classInfo.mangledName;
     }
+    return mangleClassName(classInfo.className);
   }
 
   /**
@@ -576,9 +618,102 @@ module J2ME {
     Pausing = 2
   }
 
+  /** @const */ export var MAX_PRIORITY: number = 10;
+  /** @const */ export var MIN_PRIORITY: number = 1;
+  /** @const */ export var NORMAL_PRIORITY: number = 5;
+
+  class PriorityQueue {
+    private _top: number;
+    private _queues: Context[][];
+
+    constructor() {
+      this._top = MIN_PRIORITY;
+      this._queues = [];
+      for (var i = MIN_PRIORITY; i <= MAX_PRIORITY; i++) {
+        this._queues[i] = [];
+      }
+    }
+
+    /*
+     * @param jump If true, move the context to the first of others who have the
+     * same priority.
+     */
+    enqueue(ctx: Context, jump: boolean) {
+      var priority = ctx.getPriority();
+      release || assert(priority >= MIN_PRIORITY && priority <= MAX_PRIORITY,
+                        "Invalid priority: " + priority);
+      if (jump) {
+        this._queues[priority].unshift(ctx);
+      } else {
+        this._queues[priority].push(ctx);
+      }
+      this._top = Math.max(priority, this._top);
+    }
+
+    dequeue(): Context {
+      if (this.isEmpty()) {
+        return null;
+      }
+      var ctx = this._queues[this._top].shift();
+      while (this._queues[this._top].length === 0 && this._top > MIN_PRIORITY) {
+        this._top--;
+      }
+      return ctx;
+    }
+
+    isEmpty() {
+      return this._top === MIN_PRIORITY && this._queues[this._top].length === 0;
+    }
+  }
+
   export class Runtime extends RuntimeTemplate {
     private static _nextId: number = 0;
+    private static _runningQueue: PriorityQueue = new PriorityQueue();
+    private static _processQueueScheduled: boolean = false;
+
     id: number;
+
+
+    /*
+     * The thread scheduler uses green thread algorithm, which a preemptive,
+     * priority based algorithm.
+     * All Java threads have a priority and the thread with he highest priority
+     * is scheduled to run.
+     * In case two threads have the same priority a FIFO ordering is followed.
+     * A different thread is invoked to run only if
+     *   1. The current thread blocks or terminates.
+     *   2. A thread with a higher priority than the current thread enters the
+     *      Runnable state. The lower priority thread is preempted and the
+     *      higher priority thread is scheduled to run.
+     */
+    static scheduleRunningContext(ctx: Context) {
+      // Preempt current thread if the new thread has higher priority
+      if ($ && ctx.getPriority() > $.ctx.getPriority()) {
+        Runtime._runningQueue.enqueue($.ctx, true);
+        Runtime._runningQueue.enqueue(ctx, false);
+        $.pause("preempt");
+      } else {
+        Runtime._runningQueue.enqueue(ctx, false);
+      }
+      Runtime.processRunningQueue();
+    }
+
+    private static processRunningQueue() {
+      if (Runtime._processQueueScheduled) {
+        return;
+      }
+      Runtime._processQueueScheduled = true;
+      (<any>window).setZeroTimeout(function() {
+        Runtime._processQueueScheduled = false;
+        try {
+          Runtime._runningQueue.dequeue().execute();
+        } finally {
+          if (!Runtime._runningQueue.isEmpty()) {
+            Runtime.processRunningQueue();
+          }
+        }
+      });
+    }
 
     /**
      * Bailout callback whenever a JIT frame is unwound.
@@ -692,132 +827,6 @@ module J2ME {
     }
   }
 
-  export module java.lang {
-    export interface Object {
-      /**
-       * Reference to the runtime klass.
-       */
-      klass: Klass
-
-      /**
-       * All objects have an internal hash code.
-       */
-      _hashCode: number;
-
-      /**
-       * Some objects may have a lock.
-       */
-      _lock: Lock;
-
-      waiting: Context [];
-
-      clone(): java.lang.Object;
-      equals(obj: java.lang.Object): boolean;
-      finalize(): void;
-      getClass(): java.lang.Class;
-      hashCode(): number;
-      notify(): void;
-      notifyAll(): void;
-      toString(): java.lang.String;
-      notify(): void;
-      notify(timeout: number): void;
-      notify(timeout: number, nanos: number): void;
-    }
-
-    export interface Class extends java.lang.Object {
-      /**
-       * RuntimeKlass associated with this Class object.
-       */
-      runtimeKlass: RuntimeKlass;
-    }
-
-    export interface String extends java.lang.Object {
-      str: string;
-    }
-
-    export interface Thread extends java.lang.Object {
-      pid: number;
-      alive: boolean;
-    }
-
-    export interface Exception extends java.lang.Object {
-      message: string;
-    }
-
-    export interface IllegalArgumentException extends java.lang.Exception {
-    }
-
-    export interface IllegalStateException extends java.lang.Exception {
-    }
-
-    export interface NullPointerException extends java.lang.Exception {
-    }
-
-    export interface RuntimeException extends java.lang.Exception {
-    }
-
-    export interface IndexOutOfBoundsException extends java.lang.Exception {
-    }
-
-    export interface ArrayIndexOutOfBoundsException extends java.lang.Exception {
-    }
-
-    export interface StringIndexOutOfBoundsException extends java.lang.Exception {
-    }
-
-    export interface ArrayStoreException extends java.lang.Exception {
-    }
-
-    export interface IllegalMonitorStateException extends java.lang.Exception {
-    }
-
-    export interface ClassCastException extends java.lang.Exception {
-    }
-
-    export interface NegativeArraySizeException extends java.lang.Exception {
-    }
-
-    export interface ArithmeticException extends java.lang.Exception {
-    }
-
-    export interface ClassNotFoundException extends java.lang.Exception {
-    }
-
-    export interface SecurityException extends java.lang.Exception {
-    }
-
-    export interface IllegalThreadStateException extends java.lang.Exception {
-    }
-
-  }
-
-  export module java.io {
-
-    export interface IOException extends java.lang.Exception {
-    }
-
-    export interface UTFDataFormatException extends java.lang.Exception {
-    }
-
-    export interface UnsupportedEncodingException extends java.lang.Exception {
-    }
-
-  }
-
-  export module javax.microedition.media {
-
-    export interface MediaException extends java.lang.Exception {
-    }
-
-  }
-
-  export module com.sun.cldc.isolate {
-    export interface Isolate extends java.lang.Object {
-      id: number;
-      runtime: Runtime;
-    }
-  }
-
   function initializeClassObject(runtimeKlass: RuntimeKlass) {
     linkWriter && linkWriter.writeLn("Initializing Class Object For: " + runtimeKlass.templateKlass);
     release || assert(!runtimeKlass.classObject);
@@ -892,7 +901,7 @@ module J2ME {
 
   export function registerKlassSymbol(className: string) {
     // TODO: This needs to be kept in sync to how mangleClass works.
-    var mangledName = "$" + escapeString(className);
+    var mangledName = mangleClassName(className);
     if (RuntimeTemplate.prototype.hasOwnProperty(mangledName)) {
       return;
     }
@@ -1025,7 +1034,7 @@ module J2ME {
 
   function makeKlassConstructor(classInfo: ClassInfo): Klass {
     var klass: Klass;
-    var mangledName = mangleClass(classInfo);
+    var mangledName = classInfo.mangledName;
     if (classInfo.isInterface) {
       klass = <Klass><any>function () {
         Debug.unexpected("Should never be instantiated.")
@@ -1081,11 +1090,15 @@ module J2ME {
    * callers should be calling that instead of this.
    */
   export function linkKlass(classInfo: ClassInfo) {
+    // We shouldn't do any linking if we're not in the runtime phase.
+    if (phase !== ExecutionPhase.Runtime) {
+      return;
+    }
     if (classInfo.klass) {
       return;
     }
     enterTimeline("linkKlass", {classInfo: classInfo});
-    var mangledName = mangleClass(classInfo);
+    var mangledName = classInfo.mangledName;
     var klass;
     classInfo.klass = klass = getKlass(classInfo);
     classInfo.klass.classInfo = classInfo;
@@ -1157,25 +1170,40 @@ module J2ME {
     return null;
   }
 
+  function reportError(method, key) {
+    return function() {
+      try {
+        return method.apply(this, arguments);
+      } catch (e) {
+        // Filter JAVA exception and only report the native js exception, which
+        // cannnot be handled properly by the JAVA code.
+        if (!e.klass) {
+          stderrWriter.errorLn("Native " + key + " throws: " + e);
+        }
+        throw e;
+      }
+    };
+  }
+
   function findNativeMethodImplementation(methodInfo: MethodInfo) {
+    var implKey = methodInfo.implKey;
     // Look in bindings first.
     var binding = findNativeMethodBinding(methodInfo);
     if (binding) {
-      return binding;
+      return release ? binding : reportError(binding, implKey);
     }
-    var implKey = methodInfo.implKey;
     if (methodInfo.isNative) {
       if (implKey in Native) {
-        return Native[implKey];
+        return release ? Native[implKey] : reportError(Native[implKey], implKey);
       } else {
         // Some Native MethodInfos are constructed but never called;
         // that's fine, unless we actually try to call them.
         return function missingImplementation() {
-          stderrWriter.errorLn("implKey " + methodInfo.name + " is native but does not have an implementation.");
+          stderrWriter.errorLn("implKey " + methodInfo.implKey + " is native but does not have an implementation.");
         }
       }
     } else if (implKey in Override) {
-      return Override[implKey];
+      return release ? Override[implKey] : reportError(Override[implKey], implKey);
     }
     return null;
   }
@@ -1235,9 +1263,15 @@ module J2ME {
   }
 
   function findCompiledMethod(klass: Klass, methodInfo: MethodInfo): Function {
-    var name = methodInfo.mangledClassAndMethodName;
-    var method = jsGlobal[name];
-    return method;
+    if (enableCompiledMethodCache) {
+      var cachedMethod;
+      if (!jsGlobal[methodInfo.mangledClassAndMethodName] && (cachedMethod = CompiledMethodCache.get(methodInfo.implKey))) {
+        cachedMethodCount ++;
+        linkMethod(methodInfo, cachedMethod.source, cachedMethod.referencedClasses);
+      }
+    }
+
+    return jsGlobal[methodInfo.mangledClassAndMethodName];
   }
 
   /**
@@ -1258,7 +1292,19 @@ module J2ME {
           var symbolName = symbols[key];
           var object = field.isStatic ? klass : klass.prototype;
           release || assert (!object.hasOwnProperty(symbolName), "Should not overwrite existing properties.");
-          ObjectUtilities.defineNonEnumerableForwardingProperty(object, symbolName, field.mangledName);
+          var getter = FunctionUtilities.makeForwardingGetter(field.mangledName);
+          var setter;
+          if (release) {
+            setter = FunctionUtilities.makeForwardingSetter(field.mangledName);
+          } else {
+            setter = FunctionUtilities.makeDebugForwardingSetter(field.mangledName, getKindCheck(field.kind));
+          }
+          Object.defineProperty(object, symbolName, {
+            get: getter,
+            set: setter,
+            configurable: true,
+            enumerable: false
+          });
         }
       }
     }
@@ -1423,7 +1469,12 @@ module J2ME {
   /**
    * Number of methods that have been compiled thus far.
    */
-  export var compiledCount = 0;
+  export var compiledMethodCount = 0;
+
+  /**
+   * Number of methods that have been loaded from the code cache thus far.
+   */
+  export var cachedMethodCount = 0;
 
   /**
    * Number of ms that have been spent compiled code thus far.
@@ -1446,17 +1497,25 @@ module J2ME {
       return;
     }
 
-    var mangledClassAndMethodName = mangleClassAndMethod(methodInfo);
+    if (enableCompiledMethodCache) {
+      var cachedMethod;
+      if (cachedMethod = CompiledMethodCache.get(methodInfo.implKey)) {
+        cachedMethodCount ++;
+        jitWriter && jitWriter.writeLn("Getting " + methodInfo.implKey + " from compiled method cache");
+        return linkMethod(methodInfo, cachedMethod.source, cachedMethod.referencedClasses);
+      }
+    }
 
-    compiledCount ++;
+    var mangledClassAndMethodName = methodInfo.mangledClassAndMethodName;
 
-    jitWriter && jitWriter.enter("Compiling: " + methodInfo.implKey);
+    jitWriter && jitWriter.enter("Compiling: " + methodInfo.implKey + ", currentBytecodeCount: " + methodInfo.bytecodeCount);
     var s = performance.now();
 
     var compiledMethod;
     enterTimeline("Compiling");
     try {
-      compiledMethod = baselineCompileMethod(methodInfo, CompilationTarget.Runtime);
+      compiledMethod = baselineCompileMethod(methodInfo, CompilationTarget[enableCompiledMethodCache ? "Static" : "Runtime"]);
+      compiledMethodCount ++;
     } catch (e) {
       methodInfo.state = MethodState.CannotCompile;
       jitWriter && jitWriter.writeLn("Cannot compile: " + methodInfo.implKey + " because of " + e);
@@ -1470,12 +1529,42 @@ module J2ME {
                    compiledMethod.body +
                  "\n}";
 
+    codeWriter && codeWriter.writeLns(source);
+    var referencedClasses = compiledMethod.referencedClasses.map(function(v) { return v.className });
+
+    if (enableCompiledMethodCache) {
+      CompiledMethodCache.put({
+        key: methodInfo.implKey,
+        source: source,
+        referencedClasses: referencedClasses,
+      }).catch(stderrWriter.errorLn.bind(stderrWriter));
+    }
+
+    linkMethod(methodInfo, source, referencedClasses);
+
+    var methodJITTime = (performance.now() - s);
+    totalJITTime += methodJITTime;
+    if (jitWriter) {
+      jitWriter.leave(
+        "Compilation Done: " + methodJITTime.toFixed(2) + " ms, " +
+        "codeSize: " + methodInfo.code.length + ", " +
+        "sourceSize: " + compiledMethod.body.length);
+      jitWriter.writeLn("Total: " + totalJITTime.toFixed(2) + " ms");
+    }
+  }
+
+  /**
+   * Links up compiled method at runtime.
+   */
+  export function linkMethod(methodInfo: MethodInfo, source: string, referencedClasses: string[]) {
+    jitWriter && jitWriter.writeLn("Link method: " + methodInfo.implKey);
+
     enterTimeline("Eval Compiled Code");
     // This overwrites the method on the global object.
     (1, eval)(source);
     leaveTimeline("Eval Compiled Code");
 
-    // Attach the compiled method to the method info object.
+    var mangledClassAndMethodName = methodInfo.mangledClassAndMethodName;
     var fn = jsGlobal[mangledClassAndMethodName];
     methodInfo.fn = fn;
     methodInfo.state = MethodState.Compiled;
@@ -1490,20 +1579,8 @@ module J2ME {
     jitMethodInfos[mangledClassAndMethodName] = methodInfo;
 
     // Make sure all the referenced symbols are registered.
-    var referencedClasses = compiledMethod.referencedClasses;
     for (var i = 0; i < referencedClasses.length; i++) {
-      var referencedClass = referencedClasses[i];
-      registerKlassSymbol(referencedClass.className);
-    }
-
-    var methodJITTime = (performance.now() - s);
-    totalJITTime += methodJITTime;
-    if (jitWriter) {
-      jitWriter.leave(
-        "Compilation Done: " + methodJITTime.toFixed(2) + " ms, " +
-        "codeSize: " + methodInfo.code.length + ", " +
-        "sourceSize: " + compiledMethod.body.length);
-      jitWriter.writeLn("Total: " + totalJITTime.toFixed(2) + " ms");
+      registerKlassSymbol(referencedClasses[i]);
     }
   }
 
@@ -1583,6 +1660,10 @@ module J2ME {
 
   export function newByteArray(size: number): number[]  {
     return newArray(Klasses.byte, size);
+  }
+
+  export function newIntArray(size: number): number[]  {
+    return newArray(Klasses.int, size);
   }
 
   export function getArrayKlass(elementKlass: Klass): Klass {
@@ -1670,8 +1751,14 @@ module J2ME {
   }
 
   export enum Constants {
-    INT_MAX =  2147483647,
-    INT_MIN = -2147483648
+    BYTE_MIN = -128,
+    BYTE_MAX = 127,
+    SHORT_MIN = -32768,
+    SHORT_MAX = 32767,
+    CHAR_MIN = 0,
+    CHAR_MAX = 65535,
+    INT_MIN = -2147483648,
+    INT_MAX =  2147483647
   }
 
   export function monitorEnter(object: J2ME.java.lang.Object) {
@@ -1691,7 +1778,7 @@ module J2ME {
   }
 
   export function classInitCheck(classInfo: ClassInfo, pc: number) {
-    if (classInfo.isArrayClass || $.initialized[classInfo.className]) {
+    if (classInfo.isArrayClass) {
       return;
     }
     $.ctx.pushClassInitFrame(classInfo);
@@ -1719,23 +1806,24 @@ var O: J2ME.Frame = null;
 
 /**
  * Runtime exports for compiled code.
+ * DO NOT use these short names outside of compiled code.
  */
-var $IOK = J2ME.instanceOfKlass;
-var $IOI = J2ME.instanceOfInterface;
+var IOK = J2ME.instanceOfKlass;
+var IOI = J2ME.instanceOfInterface;
 
-var $CCK = J2ME.checkCastKlass;
-var $CCI = J2ME.checkCastInterface;
+var CCK = J2ME.checkCastKlass;
+var CCI = J2ME.checkCastInterface;
 
-var $AK = J2ME.getArrayKlass;
-var $NA = J2ME.newArray;
-var $S = J2ME.newStringConstant;
+var AK = J2ME.getArrayKlass;
+var NA = J2ME.newArray;
+var SC = J2ME.newStringConstant;
 
-var $CDZ = J2ME.checkDivideByZero;
-var $CDZL = J2ME.checkDivideByZeroLong;
+var CDZ = J2ME.checkDivideByZero;
+var CDZL = J2ME.checkDivideByZeroLong;
 
-var $CAB = J2ME.checkArrayBounds;
-var $CAS = J2ME.checkArrayStore;
+var CAB = J2ME.checkArrayBounds;
+var CAS = J2ME.checkArrayStore;
 
-var $ME = J2ME.monitorEnter;
-var $MX = J2ME.monitorExit;
-var $TE = J2ME.translateException;
+var ME = J2ME.monitorEnter;
+var MX = J2ME.monitorExit;
+var TE = J2ME.translateException;

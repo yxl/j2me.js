@@ -22,6 +22,15 @@
   });
 })();
 
+var childOrigin = document.location.origin;
+document.getElementById("mozbrowser").addEventListener("mozbrowserlocationchange", function(event) {
+  childOrigin = new URL(event.detail).origin;
+  var parentOrigin = document.location.origin;
+  if (childOrigin !== parentOrigin) {
+    console.warn("on location change: child origin " + childOrigin + " !== parent origin " + parentOrigin);
+  }
+});
+
 var DumbPipe = {
   // Functions that handle requests to open a pipe, indexed by type.
   openers: {},
@@ -38,6 +47,12 @@ var DumbPipe = {
   },
 
   handleEvent: function(event) {
+    var parentOrigin = document.location.origin;
+    if (childOrigin !== parentOrigin) {
+      console.error("on show modal prompt: child origin " + childOrigin + " !== parent origin " + parentOrigin);
+      return;
+    }
+
     if (event.detail.promptType == "custom-prompt") {
       console.warn("unresponsive script warning; figure out how to handle");
       return;
@@ -540,4 +555,14 @@ DumbPipe.registerOpener("reload", function(message, sender) {
 
 DumbPipe.registerOpener("exit", function(message, sender) {
   window.close();
+});
+
+DumbPipe.registerOpener("backgroundCheck", function(message, sender) {
+  if (navigator.mozAlarms) {
+    navigator.mozAlarms.add(new Date(Date.now() + MIDlet.wakeUpAlarm), 'ignoreTimezone', {});
+
+    navigator.mozSetMessageHandler('alarm', function() {
+      navigator.mozAlarms.add(new Date(Date.now() + MIDlet.wakeUpAlarm), 'ignoreTimezone', {});
+    });
+  }
 });

@@ -69,9 +69,16 @@ Native["java/lang/System.arraycopy.(Ljava/lang/Object;ILjava/lang/Object;II)V"] 
     }
 };
 
+var stubProperties = {
+  "com.nokia.multisim.slots": 1,
+  "com.nokia.mid.imsi": "000000000000000",
+  "com.nokia.mid.imei": "",
+};
+
 Native["java/lang/System.getProperty0.(Ljava/lang/String;)Ljava/lang/String;"] = function(key) {
+    key = util.fromJavaString(key);
     var value;
-    switch (util.fromJavaString(key)) {
+    switch (key) {
     case "microedition.encoding":
         // The value of this property is different than the value on a real Nokia Asha 503 phone.
         // On the phone, it is: ISO8859_1.
@@ -177,36 +184,28 @@ Native["java/lang/System.getProperty0.(Ljava/lang/String;)Ljava/lang/String;"] =
     case "com.nokia.keyboard.type":
         value = "None";
         break;
-    case "com.nokia.multisim.slots":
-        console.warn("Property 'com.nokia.multisim.slots' is a stub");
-        value = "1";
-        break;
-    case "com.nokia.multisim.imsi.sim2":
-        console.warn("Property 'com.nokia.multisim.imsi.sim2' is a stub");
-        value = null;
-        break;
     case "com.nokia.mid.batterylevel":
         // http://developer.nokia.com/community/wiki/Checking_battery_level_in_Java_ME
         value = Math.floor(navigator.battery.level * 100).toString();
-        break;
-    case "com.nokia.mid.imsi":
-        console.warn("Property 'com.nokia.mid.imsi' is a stub");
-        value = "000000000000000";
         break;
     case "com.nokia.mid.ui.version":
         value = "1.7";
         break;
     case "com.nokia.mid.mnc":
-        // The concatenation of the MCC and MNC for the ICC (i.e. SIM card).
-        value = util.pad(mobileInfo.icc.mcc, 3) + util.pad(mobileInfo.icc.mnc, 3);
+        if (mobileInfo.icc.mcc && mobileInfo.icc.mnc) {
+            // The concatenation of the MCC and MNC for the ICC (i.e. SIM card).
+            value = util.pad(mobileInfo.icc.mcc, 3) + util.pad(mobileInfo.icc.mnc, 3);
+        } else {
+            value = null;
+        }
         break;
     case "com.nokia.mid.networkID":
-        // The concatenation of MCC and MNC for the network.
-        value = util.pad(mobileInfo.network.mcc, 3) + util.pad(mobileInfo.network.mnc, 3);
-        break;
-    case "com.nokia.mid.imei":
-        console.warn("Property 'com.nokia.mid.imei' is a stub");
-        value = "";
+        if (mobileInfo.network.mcc && mobileInfo.network.mnc) {
+            // The concatenation of MCC and MNC for the network.
+            value = util.pad(mobileInfo.network.mcc, 3) + util.pad(mobileInfo.network.mnc, 3);
+        } else {
+            value = null;
+        }
         break;
     case "com.nokia.mid.ui.customfontsize":
         value = "true";
@@ -235,10 +234,17 @@ Native["java/lang/System.getProperty0.(Ljava/lang/String;)Ljava/lang/String;"] =
         value = "encoding=jpeg&quality=80&progressive=true&type=jfif&width=400&height=400";
         break;
     default:
-        console.warn("UNKNOWN PROPERTY (java/lang/System): " + util.fromJavaString(key));
-        value = null;
+        if (MIDP.additionalProperties[key]) {
+            value = MIDP.additionalProperties[key];
+        } else if (typeof stubProperties[key] !== "undefined") {
+            value = stubProperties[key];
+        } else {
+            console.warn("UNKNOWN PROPERTY (java/lang/System): " + key);
+            stubProperties[key] = value = null;
+        }
         break;
     }
+
     return J2ME.newString(value);
 };
 
@@ -460,7 +466,7 @@ Native["java/lang/Throwable.obtainBackTrace.()Ljava/lang/Object;"] = function() 
         var depth = this.stackTrace.length;
         var classNames = J2ME.newObjectArray(depth);
         var methodNames = J2ME.newObjectArray(depth);
-        var offsets = util.newPrimitiveArray("I", depth);
+        var offsets = J2ME.newIntArray(depth);
         this.stackTrace.forEach(function(e, n) {
             classNames[n] = J2ME.newString(e.className);
             methodNames[n] = J2ME.newString(e.methodName);
@@ -613,7 +619,7 @@ Native["com/sun/cldc/io/ResourceInputStream.open.(Ljava/lang/String;)Ljava/lang/
     var data = CLASSES.loadFile(fileName);
     var obj = null;
     if (data) {
-        obj = util.newObject(CLASSES.java_lang_Object);
+        obj = J2ME.newObject(CLASSES.java_lang_Object.klass);
         obj.data = new Uint8Array(data);
         obj.pos = 0;
     }
@@ -621,7 +627,7 @@ Native["com/sun/cldc/io/ResourceInputStream.open.(Ljava/lang/String;)Ljava/lang/
 };
 
 Native["com/sun/cldc/io/ResourceInputStream.clone.(Ljava/lang/Object;)Ljava/lang/Object;"] = function(source) {
-    var obj = util.newObject(CLASSES.java_lang_Object);
+    var obj = J2ME.newObject(CLASSES.java_lang_Object.klass);
     obj.data = new Uint8Array(source.data);
     obj.pos = source.pos;
     return obj;
@@ -824,7 +830,7 @@ Native["java/io/DataOutputStream.UTFToBytes.(Ljava/lang/String;)[B"] = function(
     }
 
     var count = 0;
-    var bytearr = util.newPrimitiveArray("B", utflen + 2);
+    var bytearr = J2ME.newByteArray(utflen + 2);
     bytearr[count++] = (utflen >>> 8) & 0xFF;
     bytearr[count++] = (utflen >>> 0) & 0xFF;
     for (var i = 0; i < str.length; i++) {
@@ -847,7 +853,7 @@ Native["java/io/DataOutputStream.UTFToBytes.(Ljava/lang/String;)[B"] = function(
 Native["com/sun/cldc/i18n/j2me/UTF_8_Writer.encodeUTF8.([CII)[B"] = function(cbuf, off, len) {
   var outputArray = [];
 
-  var pendingSurrogate = this.klass.classInfo.getField("I.pendingSurrogate.I").get(this);
+  var pendingSurrogate = this.pendingSurrogate;
 
   var inputChar = 0;
   var outputSize = 0;
@@ -904,7 +910,7 @@ Native["com/sun/cldc/i18n/j2me/UTF_8_Writer.encodeUTF8.([CII)[B"] = function(cbu
     count++;
   }
 
-  this.klass.classInfo.getField("I.pendingSurrogate.I").set(this, pendingSurrogate);
+  this.pendingSurrogate = pendingSurrogate;
 
   var totalSize = outputArray.reduce(function(total, cur) {
     return total + cur.length;
@@ -924,7 +930,7 @@ Native["com/sun/cldc/i18n/j2me/UTF_8_Writer.sizeOf.([CII)I"] = function(cbuf, of
   var outputSize = 0;
   var outputCount = 0;
   var count = 0;
-  var localPendingSurrogate = this.klass.classInfo.getField("I.pendingSurrogate.I").get(this);
+  var localPendingSurrogate = this.pendingSurrogate;
   while (count < length) {
     inputChar = 0xffff & cbuf[offset + count];
     if (0 != localPendingSurrogate) {
@@ -1035,7 +1041,7 @@ Native["com/nokia/mid/impl/jms/core/Launcher.handleContent.(Ljava/lang/String;)V
     }));
 };
 
-function UnimplementedNative(signature, returnValue) {
+function addUnimplementedNative(signature, returnValue) {
     var doNotWarn;
 
     if (typeof returnValue === "function") {
@@ -1050,5 +1056,5 @@ function UnimplementedNative(signature, returnValue) {
         return doNotWarn();
     };
 
-    return function() { return warnOnce() };
+    Native[signature] = function() { return warnOnce() };
 }
