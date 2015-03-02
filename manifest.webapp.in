@@ -55,9 +55,5 @@
   "messages": [
     { "alarm": "/index.html" }
   ],
-  "type": "privileged",
-  "precompile": [
-    "libs/rusha.js",
-    "libs/relooper.js"
-  ]
+  "type": "privileged"
 }

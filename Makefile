@@ -1,10 +1,11 @@
-.PHONY: all test tests j2me java certs app clean jasmin aot shumway config-build
+.PHONY: all test tests j2me java certs app clean jasmin aot shumway config-build benchmarks
 BASIC_SRCS=$(shell find . -maxdepth 2 -name "*.ts" -not -path "./build/*") config.ts
 JIT_SRCS=$(shell find jit -name "*.ts" -not -path "./build/*")
 SHUMWAY_SRCS=$(shell find shumway -name "*.ts")
 RELEASE ?= 0
 VERSION ?=$(shell date +%s)
 PROFILE ?= 0
+BENCHMARK ?= 0
 
 # Sensor support
 JSR_256 ?= 1
@@ -30,16 +31,59 @@ toBool = $(if $(findstring 1,$(1)),true,false)
 PREPROCESS = python tools/preprocess-1.1.0/lib/preprocess.py -s \
              -D RELEASE=$(call toBool,$(RELEASE)) \
              -D PROFILE=$(call toBool,$(PROFILE)) \
+             -D BENCHMARK=$(call toBool,$(BENCHMARK)) \
              -D JSR_256=$(JSR_256) \
              -D JSR_179=$(JSR_179) \
              -D VERSION=$(VERSION)
 PREPROCESS_SRCS = $(shell find . -name "*.in" -not -path config/build.js.in)
 PREPROCESS_DESTS = $(PREPROCESS_SRCS:.in=)
 
-all: config-build java jasmin tests j2me shumway aot
+all: config-build java jasmin tests j2me shumway aot benchmarks
 
-test: all
-	tests/runtests.py
+$(shell mkdir -p build_tools)
+
+XULRUNNER_VERSION=31.0
+OLD_XULRUNNER_VERSION := $(shell [ -f build_tools/.xulrunner_version ] && cat build_tools/.xulrunner_version)
+$(shell [ "$(XULRUNNER_VERSION)" != "$(OLD_XULRUNNER_VERSION)" ] && echo $(XULRUNNER_VERSION) > build_tools/.xulrunner_version)
+
+SLIMERJS_VERSION=0.10.0pre
+OLD_SLIMERJS_VERSION := $(shell [ -f build_tools/.slimerjs_version ] && cat build_tools/.slimerjs_version)
+$(shell [ "$(SLIMERJS_VERSION)" != "$(OLD_SLIMERJS_VERSION)" ] && echo $(SLIMERJS_VERSION) > build_tools/.slimerjs_version)
+
+PATH := build_tools/slimerjs-$(SLIMERJS_VERSION):${PATH}
+
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_S),Linux)
+	XULRUNNER_PLATFORM=linux-$(UNAME_M)
+	XULRUNNER_PATH=xulrunner/xulrunner
+endif
+ifeq ($(UNAME_S),Darwin)
+	XULRUNNER_PLATFORM=mac
+	XULRUNNER_PATH=XUL.framework/Versions/Current/xulrunner
+endif
+ifneq (,$(findstring MINGW,$(uname_S)))
+	XULRUNNER_PLATFORM=win32
+	XULRUNNER_PATH=xulrunner/xulrunner
+endif
+ifneq (,$(findstring CYGWIN,$(uname_S)))
+	XULRUNNER_PLATFORM=win32
+	XULRUNNER_PATH=xulrunner/xulrunner
+endif
+
+test: all build_tools/slimerjs-$(SLIMERJS_VERSION) build_tools/$(XULRUNNER_PATH)
+	SLIMERJSLAUNCHER=build_tools/$(XULRUNNER_PATH) tests/runtests.py
+
+build_tools/slimerjs-$(SLIMERJS_VERSION): build_tools/.slimerjs_version
+	rm -rf build_tools/slimerjs*
+	wget -P build_tools -N https://ftp.mozilla.org/pub/mozilla.org/labs/j2me.js/slimerjs-0.10.0pre-2014-12-17.zip
+	unzip -o -d build_tools build_tools/slimerjs-0.10.0pre-2014-12-17.zip
+	touch build_tools/slimerjs-$(SLIMERJS_VERSION)
+
+build_tools/$(XULRUNNER_PATH): build_tools/.xulrunner_version
+	rm -rf build_tools/XUL* build_tools/xul*
+	wget -P build_tools -N https://ftp.mozilla.org/pub/mozilla.org/xulrunner/releases/$(XULRUNNER_VERSION)/runtimes/xulrunner-$(XULRUNNER_VERSION).en-US.$(XULRUNNER_PLATFORM).tar.bz2
+	tar x -C build_tools -f build_tools/xulrunner-$(XULRUNNER_VERSION).en-US.$(XULRUNNER_PLATFORM).tar.bz2 -m
 
 $(PREPROCESS_DESTS): $(PREPROCESS_SRCS) .checksum
 	$(foreach file,$(PREPROCESS_SRCS),$(PREPROCESS) -o $(file:.in=) $(file);)
@@ -94,7 +138,7 @@ config-build: config/build.js.in
 	$(PREPROCESS) -o config/build.js config/build.js.in
 
 tests/tests.jar: tests
-tests:
+tests: java jasmin
 	make -C tests
 
 java/classes.jar: java
@@ -105,8 +149,11 @@ certs:
 	make -C certs
 
 # Makes an output/ directory containing the packaged open web app files.
-app: config-build java certs
+app: config-build java certs j2me aot
 	tools/package.sh
+
+benchmarks: java tests
+	make -C bench
 
 clean:
 	rm -f j2me.js `find . -name "*~"`
@@ -115,3 +162,4 @@ clean:
 	make -C tools/jasmin-2.4 clean
 	make -C tests clean
 	make -C java clean
+	make -C bench clean

@@ -23,6 +23,12 @@ var config = {
   platform: "Nokia311",
   autosize: 1,
   logConsole: "web",
+
+  // Ignored files are files that always exist and are empty, so we discard
+  // writes to them and return no data from reads.  It's useful for log files
+  // to which midlets write frequently but never read.  Specify one by adding
+  // the string pathname to the set via config.ignoredFiles.add().
+  ignoredFiles: new Set(),
 };
 
 // The base directory of the app, relative to the current page.  Normally this

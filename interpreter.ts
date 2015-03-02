@@ -948,7 +948,7 @@ module J2ME {
             var lengths = new Array(dimensions);
             for (var i = 0; i < dimensions; i++)
               lengths[i] = stack.pop();
-            stack.push(util.newMultiArray(classInfo, lengths.reverse()));
+            stack.push(J2ME.newMultiArray(classInfo.klass, lengths.reverse()));
             break;
           case Bytecodes.ARRAYLENGTH:
             array = stack.pop();
@@ -1103,7 +1103,8 @@ module J2ME {
                 returnValue = calleeMethod.call(object, a, b, c);
                 break;
               default:
-                debugger;
+                Debug.assertUnreachable("Unexpected number of arguments");
+                break;
             }
             stack.pop();
             if (!release) {

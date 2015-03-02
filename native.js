@@ -3,21 +3,6 @@
 
 'use strict';
 
-var TAGS = {
-    CONSTANT_Class: 7,
-    CONSTANT_Fieldref: 9,
-    CONSTANT_Methodref: 10,
-    CONSTANT_InterfaceMethodref: 11,
-    CONSTANT_String: 8,
-    CONSTANT_Integer: 3,
-    CONSTANT_Float: 4,
-    CONSTANT_Long: 5,
-    CONSTANT_Double: 6,
-    CONSTANT_NameAndType: 12,
-    CONSTANT_Utf8: 1,
-    CONSTANT_Unicode: 2,
-};
-
 var Native = {};
 
 Native["java/lang/System.arraycopy.(Ljava/lang/Object;ILjava/lang/Object;II)V"] = function(src, srcOffset, dst, dstOffset, length) {
@@ -607,7 +592,7 @@ Native["com/sun/cldchi/io/ConsoleOutputStream.write.(I)V"] = function(ch) {
 
 Native["com/sun/cldc/io/ResourceInputStream.open.(Ljava/lang/String;)Ljava/lang/Object;"] = function(name) {
     var fileName = util.fromJavaString(name);
-    var data = CLASSES.loadFile(fileName);
+    var data = JARStore.loadFile(fileName);
     var obj = null;
     if (data) {
         obj = J2ME.newObject(CLASSES.java_lang_Object.klass);
@@ -723,7 +708,6 @@ var waitingForLinks = {};
 Native["com/sun/midp/links/LinkPortal.getLinkCount0.()I"] = function() {
     var ctx = $.ctx;
     asyncImpl("I", new Promise(function(resolve, reject) {
-        ctx.setAsCurrentContext();
         var isolateId = ctx.runtime.isolate.id;
 
         if (!links[isolateId]) {
@@ -785,19 +769,6 @@ Native["com/sun/cldc/i18n/j2me/UTF_8_Reader.readNative.([CII)I"] = function(cbuf
     this.decoded = this.decoded.substring(len);
 
     return len;
-};
-
-Native["java/io/DataInputStream.bytesToUTF.([B)Ljava/lang/String;"] = function(bytearr) {
-    var array = new Int8Array(bytearr.buffer);
-    try {
-        return J2ME.newString(util.decodeUtf8Array(array));
-    } catch(e) {
-        try {
-            return J2ME.newString(util.javaUTF8Decode(array));
-        } catch (e) {
-            throw $.newUTFDataFormatException();
-        }
-    }
 };
 
 Native["java/io/DataOutputStream.UTFToBytes.(Ljava/lang/String;)[B"] = function(jStr) {
@@ -986,8 +957,8 @@ Native["com/nokia/mid/impl/jms/core/Launcher.handleContent.(Ljava/lang/String;)V
         // the root dir to make sure it's valid.
         fileName = "/" + fileName;
         fs.open(fileName, function(fd) {
-            ctx.setAsCurrentContext();
             if (fd == -1) {
+                ctx.setAsCurrentContext();
                 console.error("File not found: " + fileName);
                 reject($.newException("File not found: " + fileName));
                 return;
@@ -1008,8 +979,8 @@ Native["com/nokia/mid/impl/jms/core/Launcher.handleContent.(Ljava/lang/String;)V
                 mask.style.position = "absolute";
                 mask.style.top = 0;
                 mask.style.left = 0;
-                mask.style.height = MIDP.Context2D.canvas.height + "px";
-                mask.style.width = MIDP.Context2D.canvas.width + "px";
+                mask.style.height = MIDP.context2D.canvas.height + "px";
+                mask.style.width = MIDP.context2D.canvas.width + "px";
                 mask.style.backgroundColor = "#000";
                 mask.style.backgroundPosition = "center center";
                 mask.style.backgroundRepeat = "no-repeat";
@@ -1049,3 +1020,9 @@ function addUnimplementedNative(signature, returnValue) {
 
     Native[signature] = function() { return warnOnce() };
 }
+
+Native["org/mozilla/internal/Sys.eval.(Ljava/lang/String;)V"] = function(src) {
+    if (!release) {
+        eval(J2ME.fromJavaString(src));
+    }
+};
