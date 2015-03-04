@@ -854,6 +854,7 @@ var currentlyFocusedTextEditor;
         return parts;
     }
 
+    var lastDisplayId = null;
     function setClip(g, x, y, width, height) {
         var newX1 = Math.max(0, x) & 0x7fff;
         var newX2 = Math.min(g.maxWidth, x + width) & 0x7fff;
@@ -876,12 +877,14 @@ var currentlyFocusedTextEditor;
         }
 
         // If we're expanding the clip rect, we need to restore the pre-clipped context
-        if (newX1 < g.clipX1 || newX2 > g.clipX2 || newY1 < g.clipY1 || newY2 > g.clipY2) {
+        if (newX1 < g.clipX1 || newX2 > g.clipX2 || newY1 < g.clipY1 || newY2 > g.clipY2 ||
+            g.displayId != lastDisplayId) {
             g.context2D.restore();
             g.context2D.translate(g.transX, g.transY);
             g.context2D.save();
         }
 
+        lastDisplayId = g.displayId;
         g.clipped = newX1 > 0 ||
                     newY1 > 0 ||
                     newX2 < g.maxWidth ||
