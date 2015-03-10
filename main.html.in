@@ -38,7 +38,6 @@
   <script type="text/javascript" src="libs/relooper.js" defer></script>
   <script type="text/javascript" src="build/j2me.js" defer></script>
   <script type="text/javascript" src="override.js" defer></script>
-  <script type="text/javascript" src="vm/tags.js" defer></script>
   <script type="text/javascript" src="native.js" defer></script>
   <script type="text/javascript" src="string.js" defer></script>
   <script type="text/javascript" src="libs/load.js" defer></script>
@@ -180,6 +179,10 @@
       <div id="main" role="main">
         <canvas id="canvas"></canvas>
         <input id="password-editor" class="text-editor" type="password">
+        <input id="tel-editor" class="text-editor" type="tel">
+        <input id="number-editor" class="text-editor" type="number">
+        <input id="email-editor" class="text-editor" type="email">
+        <input id="url-editor" class="text-editor" type="url">
         <div id="textarea-editor" class="text-editor" contenteditable="true"></div>
         <!-- The hidden textarea editor is used to measure the content height -->
         <div id="hidden-textarea-editor" class="text-editor"></div>

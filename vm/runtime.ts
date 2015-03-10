@@ -64,7 +64,7 @@ module J2ME {
   /**
    * Enables more compact mangled names. This helps reduce code size but may cause naming collisions.
    */
-  var hashedMangledNames = false;
+  var hashedMangledNames = release;
 
   /**
    * Traces method execution.
@@ -446,7 +446,6 @@ module J2ME {
     pending: any;
     staticFields: any;
     classObjects: any;
-    classInitLockObjects: any;
     ctx: Context;
 
     isolate: com.sun.cldc.isolate.Isolate;
@@ -466,9 +465,39 @@ module J2ME {
       this.staticFields = {};
       this.classObjects = {};
       this.ctx = null;
-      this.classInitLockObjects = {};
       this._runtimeId = RuntimeTemplate._nextRuntimeId ++;
       this._nextHashCode = this._runtimeId << 24;
+    }
+    
+    preInitializeClasses(ctx: Context) {
+      var prevCtx = $ ? $.ctx : null;
+      var preInit = CLASSES.preInitializedClasses;
+      ctx.setAsCurrentContext();
+      for (var i = 0; i < preInit.length; i++) {
+        var runtimeKlass = this.getRuntimeKlass(preInit[i].klass);
+        runtimeKlass.classObject.initialize();
+        release || Debug.assert(!U, "Unexpected unwind during preInitializeClasses.");
+      }
+      ctx.clearCurrentContext();
+      if (prevCtx) {
+        prevCtx.setAsCurrentContext();
+      }
+    }
+
+    /**
+     * After class intialization is finished the init9 method will invoke this so
+     * any further initialize calls can be avoided. This isn't set on the first call
+     * to a class initializer because there can be multiple calls into initialize from
+     * different threads that need trigger the Class.initialize() code so they block.
+     */
+    setClassInitialized(runtimeKlass: RuntimeKlass) {
+      var className = runtimeKlass.templateKlass.classInfo.className;
+      this.initialized[className] = true;
+    }
+
+    getRuntimeKlass(klass: Klass): RuntimeKlass {
+      var runtimeKlass = this[klass.classInfo.mangledName];
+      return runtimeKlass;
     }
 
     /**
@@ -722,10 +751,20 @@ module J2ME {
     /**
      * Bailout callback whenever a JIT frame is unwound.
      */
-    B(bci: number, nextBCI: number, local: any [], stack: any [], lockObject: java.lang.Object) {
+    B(pc: number, nextPC: number, local: any [], stack: any [], lockObject: java.lang.Object) {
       var methodInfo = jitMethodInfos[(<any>arguments.callee.caller).name];
       release || assert(methodInfo !== undefined);
-      $.ctx.bailout(methodInfo, bci, nextBCI, local, stack, lockObject);
+      $.ctx.bailout(methodInfo, pc, nextPC, local, stack, lockObject);
+    }
+
+    /**
+     * Bailout callback whenever a JIT frame is unwound that uses a slightly different calling
+     * convetion that makes it more convenient to emit in some cases.
+     */
+    T(location: UnwindThrowLocation, local: any [], stack: any [], lockObject: java.lang.Object) {
+      var methodInfo = jitMethodInfos[(<any>arguments.callee.caller).name];
+      release || assert(methodInfo !== undefined);
+      $.ctx.bailout(methodInfo, location.getPC(), location.getNextPC(), local, stack.slice(0, location.getSP()), lockObject);
     }
 
     yield(reason: string) {
@@ -844,7 +883,16 @@ module J2ME {
     release || assert(!runtimeKlass.classObject);
     runtimeKlass.classObject = <java.lang.Class><any>new Klasses.java.lang.Class();
     runtimeKlass.classObject.runtimeKlass = runtimeKlass;
-    var fields = runtimeKlass.templateKlass.classInfo.fields;
+    var className = runtimeKlass.templateKlass.classInfo.className;
+    if (className === "java/lang/Object" ||
+        className === "java/lang/Class" ||
+        className === "java/lang/String" ||
+        className === "java/lang/Thread") {
+      (<any>runtimeKlass.classObject).status = 4;
+      $.setClassInitialized(runtimeKlass);
+      return;
+    }
+    var fields = runtimeKlass.templateKlass.classInfo.getFields();
     for (var i = 0; i < fields.length; i++) {
       var field = fields[i];
       if (field.isStatic) {
@@ -882,10 +930,6 @@ module J2ME {
         Object.defineProperty(this, classInfo.mangledName, {
           value: runtimeKlass
         });
-        initWriter && initWriter.writeLn("Running Static Constructor: " + classInfo.className);
-        $.ctx.pushClassInitFrame(classInfo);
-        release || assert(!U, "Unwinding during static initializer not supported.");
-
         return runtimeKlass;
       }
     });
@@ -940,14 +984,6 @@ module J2ME {
       var className = classNames[i];
       registerKlassSymbol(className);
     }
-  }
-
-  export function getRuntimeKlass(runtime: Runtime, klass: Klass): RuntimeKlass {
-    release || assert(!(klass instanceof RuntimeKlass));
-    release || assert(klass.classInfo.mangledName);
-    var runtimeKlass = runtime[klass.classInfo.mangledName];
-    // assert(runtimeKlass instanceof RuntimeKlass);
-    return runtimeKlass;
   }
 
   function setKlassSymbol(mangledName: string, klass: Klass) {
@@ -1021,7 +1057,7 @@ module J2ME {
     registerKlass(klass, classInfo);
     leaveTimeline("registerKlass");
 
-    if (classInfo.isArrayClass) {
+    if (classInfo instanceof ArrayClassInfo) {
       klass.isArrayKlass = true;
       var elementKlass = getKlass(classInfo.elementClass);
       elementKlass.arrayKlass = klass;
@@ -1049,7 +1085,7 @@ module J2ME {
         return "[Interface Klass " + classInfo.className + "]";
       };
       setKlassSymbol(mangledName, klass);
-    } else if (classInfo.isArrayClass) {
+    } else if (classInfo instanceof ArrayClassInfo) {
       var elementKlass = getKlass(classInfo.elementClass);
       // Have we already created one? We need to maintain pointer identity.
       if (elementKlass.arrayKlass) {
@@ -1290,7 +1326,7 @@ module J2ME {
    */
   function linkKlassFields(klass: Klass) {
     var classInfo = klass.classInfo;
-    var fields = classInfo.fields;
+    var fields = classInfo.getFields();
     var classBindings = Bindings[klass.classInfo.className];
     if (classBindings && classBindings.fields) {
       for (var i = 0; i < fields.length; i++) {
@@ -1322,8 +1358,13 @@ module J2ME {
   }
 
   function linkKlassMethods(klass: Klass) {
+    var methods = klass.classInfo.getMethods();
+    if (!methods) {
+      return;
+    }
     linkWriter && linkWriter.enter("Link Klass Methods: " + klass);
-    var methods = klass.classInfo.methods;
+    var methods = klass.classInfo.getMethods();
+    var classBindings = Bindings[klass.classInfo.className];
     for (var i = 0; i < methods.length; i++) {
       var methodInfo = methods[i];
       if (methodInfo.isAbstract) {
@@ -1373,6 +1414,12 @@ module J2ME {
       }
       if (!methodInfo.isStatic) {
         klass.prototype[methodInfo.mangledName] = fn;
+        if (classBindings && classBindings.methods && classBindings.methods.instanceSymbols) {
+          var methodKey = classBindings.methods.instanceSymbols[methodInfo.name + "." + methodInfo.signature];
+          if (methodKey) {
+            klass.prototype[methodKey] = fn;
+          }
+        }
       }
     }
 
@@ -1384,7 +1431,7 @@ module J2ME {
         if (methodType === MethodType.Interpreted) {
           nativeCounter.count(MethodType[MethodType.Interpreted]);
           key += methodInfo.isSynchronized ? " Synchronized" : "";
-          key += methodInfo.exception_table.length ? " Has Exceptions" : "";
+          key += methodInfo.exception_table_length ? " Has Exceptions" : "";
           // key += " " + methodInfo.implKey;
         }
         // var key = methodType !== MethodType.Interpreted ? MethodType[methodType] : methodInfo.implKey;
@@ -1422,7 +1469,7 @@ module J2ME {
     function tracingWrapper(fn: Function, methodInfo: MethodInfo, methodType: MethodType) {
       return function() {
         var args = Array.prototype.slice.apply(arguments);
-        traceWriter.enter("> " + MethodType[methodType][0] + " " + methodInfo.implKey + " " + (methodInfo.callCount ++));
+        traceWriter.enter("> " + MethodType[methodType][0] + " " + methodInfo.implKey + " " + (methodInfo.stats.callCount ++));
         var s = performance.now();
         var value = fn.apply(this, args);
         traceWriter.outdent();
@@ -1452,9 +1499,11 @@ module J2ME {
     release || assert (!klass.interfaces);
     var interfaces = klass.interfaces = klass.superKlass ? klass.superKlass.interfaces.slice() : [];
 
-    var interfaceClassInfos = classInfo.interfaces;
-    for (var j = 0; j < interfaceClassInfos.length; j++) {
-      ArrayUtilities.pushUnique(interfaces, getKlass(interfaceClassInfos[j]));
+    var interfaceClassInfos = classInfo.getAllInterfaces();
+    if (interfaceClassInfos) {
+      for (var j = 0; j < interfaceClassInfos.length; j++) {
+        ArrayUtilities.pushUnique(interfaces, getKlass(interfaceClassInfos[j]));
+      }
     }
   }
 
@@ -1507,8 +1556,8 @@ module J2ME {
     }
 
     // Don't compile methods that are too large.
-    if (methodInfo.code.length > 2000) {
-      jitWriter && jitWriter.writeLn("Not compiling: " + methodInfo.implKey + " because it's too large. " + methodInfo.code.length);
+    if (methodInfo.codeAttribute.code.length > 2000) {
+      jitWriter && jitWriter.writeLn("Not compiling: " + methodInfo.implKey + " because it's too large. " + methodInfo.codeAttribute.code.length);
       methodInfo.state = MethodState.NotCompiled;
       return;
     }
@@ -1524,7 +1573,7 @@ module J2ME {
 
     var mangledClassAndMethodName = methodInfo.mangledClassAndMethodName;
 
-    jitWriter && jitWriter.enter("Compiling: " + methodInfo.implKey + ", currentBytecodeCount: " + methodInfo.bytecodeCount);
+    jitWriter && jitWriter.enter("Compiling: " + methodInfo.implKey + ", currentBytecodeCount: " + methodInfo.stats.bytecodeCount);
     var s = performance.now();
 
     var compiledMethod;
@@ -1564,7 +1613,7 @@ module J2ME {
     if (jitWriter) {
       jitWriter.leave(
         "Compilation Done: " + methodJITTime.toFixed(2) + " ms, " +
-        "codeSize: " + methodInfo.code.length + ", " +
+        "codeSize: " + methodInfo.codeAttribute.code.length + ", " +
         "sourceSize: " + compiledMethod.body.length);
       jitWriter.writeLn("Total: " + totalJITTime.toFixed(2) + " ms");
     }
@@ -1807,15 +1856,13 @@ module J2ME {
     return e;
   }
 
-  export function classInitCheck(classInfo: ClassInfo, pc: number) {
-    if (classInfo.isArrayClass) {
+  export function classInitCheck(classInfo: ClassInfo) {
+    if (classInfo instanceof ArrayClassInfo || $.initialized[classInfo.className]) {
       return;
     }
-    $.ctx.pushClassInitFrame(classInfo);
-    if (U) {
-      $.ctx.current().pc = pc;
-      return;
-    }
+    linkKlass(classInfo);
+    var runtimeKlass = $.getRuntimeKlass(classInfo.klass);
+    runtimeKlass.classObject.initialize();
   }
 
   /**
@@ -1850,6 +1897,76 @@ module J2ME {
       $.yield("preemption");
     }
   }
+
+  export class UnwindThrowLocation {
+    static instance: UnwindThrowLocation = new UnwindThrowLocation();
+    pc: number;
+    sp: number;
+    nextPC: number;
+    constructor() {
+      this.pc = 0;
+      this.sp = 0;
+      this.nextPC = 0;
+    }
+    setLocation(pc: number, nextPC: number, sp: number) {
+      this.pc = pc;
+      this.sp = sp;
+      this.nextPC = nextPC;
+      return this;
+    }
+    getPC() {
+      return this.pc;
+    }
+    getSP() {
+      return this.sp;
+    }
+    getNextPC() {
+      return this.nextPC;
+    }
+  }
+
+  /**
+   * Generic unwind throw.
+   */
+  export function throwUnwind(pc: number, nextPC: number = pc + 3, sp: number = 0) {
+    throw UnwindThrowLocation.instance.setLocation(pc, nextPC, sp);
+  }
+
+  /**
+   * Unwind throws with different stack heights. This is useful so we can
+   * save a few bytes encoding the stack height in the function name.
+   */
+  export function throwUnwind0(pc: number, nextPC: number = pc + 3) {
+    throwUnwind(pc, nextPC, 0);
+  }
+
+  export function throwUnwind1(pc: number, nextPC: number = pc + 3) {
+    throwUnwind(pc, nextPC, 1);
+  }
+
+  export function throwUnwind2(pc: number, nextPC: number = pc + 3) {
+    throwUnwind(pc, nextPC, 2);
+  }
+
+  export function throwUnwind3(pc: number, nextPC: number = pc + 3) {
+    throwUnwind(pc, nextPC, 3);
+  }
+
+  export function throwUnwind4(pc: number, nextPC: number = pc + 3) {
+    throwUnwind(pc, nextPC, 4);
+  }
+
+  export function throwUnwind5(pc: number, nextPC: number = pc + 3) {
+    throwUnwind(pc, nextPC, 5);
+  }
+
+  export function throwUnwind6(pc: number, nextPC: number = pc + 3) {
+    throwUnwind(pc, nextPC, 6);
+  }
+
+  export function throwUnwind7(pc: number, nextPC: number = pc + 3) {
+    throwUnwind(pc, nextPC, 7);
+  }
 }
 
 var Runtime = J2ME.Runtime;
@@ -1862,6 +1979,17 @@ var AOTMD = J2ME.aotMetaData;
  * read very often.
  */
 var U: J2ME.VMState = J2ME.VMState.Running;
+
+// Several unwind throws for different stack heights.
+
+var B0 = J2ME.throwUnwind0;
+var B1 = J2ME.throwUnwind1;
+var B2 = J2ME.throwUnwind2;
+var B3 = J2ME.throwUnwind3;
+var B4 = J2ME.throwUnwind4;
+var B5 = J2ME.throwUnwind5;
+var B6 = J2ME.throwUnwind6;
+var B7 = J2ME.throwUnwind7;
 
 /**
  * OSR Frame.

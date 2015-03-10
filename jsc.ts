@@ -84,7 +84,7 @@ module J2ME {
     }
   }
 
-  loadFiles("blackBox.js", "build/j2me-jsc.js", "libs/zipfile.js", "libs/jarstore.js", "libs/encoding.js", "util.js");
+  loadFiles("libs/long.js", "blackBox.js", "build/j2me-jsc.js", "libs/zipfile.js", "libs/jarstore.js", "libs/encoding.js", "util.js");
 
   phase = ExecutionPhase.Compiler;
 
@@ -187,7 +187,6 @@ module J2ME {
 
     var jarFiles = Object.create(null);
 
-    release = releaseOption.value;
     var jvm = new JVM();
     for (var i = 0; i < files.length; i++) {
       var file = files[i];
