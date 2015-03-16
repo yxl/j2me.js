@@ -168,6 +168,23 @@ module J2ME {
           "stringParam6.Ljava/lang/String;": "stringParam6",
         }
       }
+    },
+    "com/sun/cdc/io/j2me/file/DefaultFileHandler": {
+      fields: {
+        instanceSymbols: {
+          "nativePath.Ljava/lang/String;": "nativePath",
+          "nativeDescriptor.I": "nativeDescriptor",
+          "isOpenForRead.Z": "isOpenForRead",
+          "isOpenForWrite.Z": "isOpenForWrite"
+        }
+      }
+    },
+    "com/sun/cdc/io/j2me/file/Protocol": {
+      fields: {
+        instanceSymbols: {
+          "fileHandler.Lcom/sun/cdc/io/j2me/file/BaseFileHandler;": "fileHandler",
+        }
+      }
     }
   };
 
@@ -222,6 +239,9 @@ module J2ME {
 
     export interface Exception extends java.lang.Object {
       message: string;
+    }
+
+    export interface InstantiationException extends java.lang.Exception {
     }
 
     export interface IllegalArgumentException extends java.lang.Exception {

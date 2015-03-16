@@ -184,6 +184,7 @@ module J2ME {
         ClassNotFoundException: null,
         SecurityException: null,
         IllegalThreadStateException: null,
+        InstantiationException: null,
         Exception: null
       },
       io: {
@@ -652,6 +653,11 @@ module J2ME {
         "javax/microedition/media/MediaException", str);
     }
 
+    newInstantiationException(str?: string): java.lang.InstantiationException {
+      return <java.lang.InstantiationException>$.ctx.createException(
+        "java/lang/InstantiationException", str);
+    }
+
     newException(str?: string): java.lang.Exception {
       return <java.lang.Exception>$.ctx.createException(
         "java/lang/Exception", str);
@@ -715,16 +721,13 @@ module J2ME {
 
 
     /*
-     * The thread scheduler uses green thread algorithm, which a preemptive,
+     * The thread scheduler uses green thread algorithm, which a non-preemptive,
      * priority based algorithm.
      * All Java threads have a priority and the thread with he highest priority
      * is scheduled to run.
      * In case two threads have the same priority a FIFO ordering is followed.
-     * A different thread is invoked to run only if
-     *   1. The current thread blocks or terminates.
-     *   2. A thread with a higher priority than the current thread enters the
-     *      Runnable state. The lower priority thread is preempted and the
-     *      higher priority thread is scheduled to run.
+     * A different thread is invoked to run only if the current thread blocks or
+     * terminates.
      */
     static scheduleRunningContext(ctx: Context) {
       Runtime._runningQueue.enqueue(ctx);
@@ -1162,6 +1165,7 @@ module J2ME {
         case "java/lang/String": Klasses.java.lang.String = klass; break;
         case "java/lang/Thread": Klasses.java.lang.Thread = klass; break;
         case "java/lang/Exception": Klasses.java.lang.Exception = klass; break;
+        case "java/lang/InstantiationException": Klasses.java.lang.InstantiationException = klass; break;
         case "java/lang/IllegalArgumentException": Klasses.java.lang.IllegalArgumentException = klass; break;
         case "java/lang/NegativeArraySizeException": Klasses.java.lang.NegativeArraySizeException = klass; break;
         case "java/lang/IllegalStateException": Klasses.java.lang.IllegalStateException = klass; break;
@@ -1240,7 +1244,7 @@ module J2ME {
         // Some Native MethodInfos are constructed but never called;
         // that's fine, unless we actually try to call them.
         return function missingImplementation() {
-          stderrWriter.errorLn("implKey " + methodInfo.implKey + " is native but does not have an implementation.");
+          stderrWriter.errorLn("implKey " + implKey + " is native but does not have an implementation.");
         }
       }
     } else if (implKey in Override) {

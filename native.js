@@ -286,7 +286,7 @@ Native["java/lang/Class.getSuperclass.()Ljava/lang/Class;"] = function() {
 Native["java/lang/Class.invoke_clinit.()V"] = function() {
     var classInfo = this.runtimeKlass.templateKlass.classInfo;
     var className = classInfo.className;
-    var clinit = classInfo.getMethodByName("<clinit>", "()V", true);
+    var clinit = classInfo.staticInitializer;
     if (clinit && clinit.classInfo.className === className) {
         $.ctx.executeFrames([Frame.create(clinit, [], 0)]);
     }
@@ -328,12 +328,27 @@ Native["java/lang/Class.forName1.(Ljava/lang/String;)Ljava/lang/Class;"] = funct
 };
 
 Native["java/lang/Class.newInstance0.()Ljava/lang/Object;"] = function() {
+  if (this.runtimeKlass.templateKlass.classInfo.isInterface ||
+      this.runtimeKlass.templateKlass.classInfo.isAbstract) {
+    throw $.newInstantiationException("Can't instantiate interfaces or abstract classes");
+  }
+
+  if (this.runtimeKlass.templateKlass.classInfo instanceof J2ME.ArrayClassInfo) {
+    throw $.newInstantiationException("Can't instantiate array classes");
+  }
+
   return new this.runtimeKlass.templateKlass;
 };
 
 Native["java/lang/Class.newInstance1.(Ljava/lang/Object;)V"] = function(o) {
   // The following can trigger an unwind.
-  o.klass.classInfo.getMethodByName("<init>", "()V", false).fn.call(o);
+  var method = o.klass.classInfo.getLocalMethodByName("<init>", "()V", false);
+
+  if (!method) {
+    throw $.newInstantiationException("Can't instantiate classes without a nullary constructor");
+  }
+
+  method.fn.call(o);
 };
 
 Native["java/lang/Class.isInterface.()Z"] = function() {
@@ -412,16 +427,19 @@ Native["java/lang/Throwable.obtainBackTrace.()Ljava/lang/Object;"] = function() 
         var depth = this.stackTrace.length;
         var classNames = J2ME.newObjectArray(depth);
         var methodNames = J2ME.newObjectArray(depth);
+        var methodSignatures = J2ME.newObjectArray(depth);
         var offsets = J2ME.newIntArray(depth);
         this.stackTrace.forEach(function(e, n) {
             classNames[n] = J2ME.newString(e.className);
             methodNames[n] = J2ME.newString(e.methodName);
+            methodSignatures[n] = J2ME.newString(e.methodSignature);
             offsets[n] = e.offset;
         });
         result = J2ME.newObjectArray(3);
         result[0] = classNames;
         result[1] = methodNames;
-        result[2] = offsets;
+        result[2] = methodSignatures;
+        result[3] = offsets;
     }
     return result;
 };
