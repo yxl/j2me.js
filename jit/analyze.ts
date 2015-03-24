@@ -17,6 +17,7 @@ module J2ME {
     Virtual = 4,
     Cycle = 5,
     Yield = 6,
+    Likely = 7
   }
 
   /**
@@ -89,7 +90,7 @@ module J2ME {
     if (!result) {
       result = classInfo.subClasses.length === 0;
     }
-    // console.log(classInfo.className + " is final class " + result);
+    // console.log(classInfo.getClassNameSlow() + " is final class " + result);
     return result;
     */
   }
@@ -220,6 +221,10 @@ module J2ME {
   }
 
   export function canYield(methodInfo: MethodInfo): YieldReason {
+    if (phase === ExecutionPhase.Runtime && methodInfo.codeAttribute && methodInfo.codeAttribute.code.length > 100) {
+      // Large methods are likely to yield, so don't even bother checking at runtime.
+      return YieldReason.Likely;
+    }
     yieldWriter && yieldWriter.enter("> " + methodInfo.implKey);
     if (yieldMap[methodInfo.implKey] !== undefined) {
       yieldWriter && yieldWriter.leave("< " + methodInfo.implKey + " " + YieldReason[yieldMap[methodInfo.implKey]] + " cached.");

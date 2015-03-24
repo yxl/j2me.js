@@ -40,7 +40,8 @@ function receiveSms(text, addr) {
  * the app.
  */
 function promptForMessageText() {
-    var el = document.getElementById('sms-listener-prompt').cloneNode(true);
+    var smsTemplateNode = document.getElementById('sms-listener-prompt');
+    var el = smsTemplateNode.cloneNode(true);
     el.style.display = 'block';
     el.classList.add('visible');
 
@@ -90,7 +91,7 @@ function promptForMessageText() {
     el.querySelector('p.timeLeft').textContent = toTimeText(MIDlet.SMSDialogTimeout) +
                                                  " " + MIDlet.SMSDialogTimeoutText;
 
-    document.body.appendChild(el);
+    smsTemplateNode.parentNode.appendChild(el);
     if (currentlyFocusedTextEditor) {
       currentlyFocusedTextEditor.blur();
       currentlyFocusedTextEditor = null;
@@ -115,7 +116,7 @@ Native["com/sun/midp/io/j2me/sms/Protocol.open0.(Ljava/lang/String;II)I"] = func
     MIDP.smsConnections[++MIDP.lastSMSConnection] = {
       port: port,
       msid: msid,
-      host: util.fromJavaString(host),
+      host: J2ME.fromJavaString(host),
     };
 
     return ++MIDP.lastSMSConnection;
@@ -139,11 +140,11 @@ function(port, msid, handle, smsPacket) {
                 address[i] = addr.charCodeAt(i);
             }
 
-            smsPacket.klass.classInfo.getField("I.message.[B").set(smsPacket, message);
-            smsPacket.klass.classInfo.getField("I.address.[B").set(smsPacket, address);
-            smsPacket.klass.classInfo.getField("I.port.I").set(smsPacket, port);
-            smsPacket.klass.classInfo.getField("I.sentAt.J").set(smsPacket, Long.fromNumber(Date.now()));
-            smsPacket.klass.classInfo.getField("I.messageType.I").set(smsPacket, 0); // GSM_TEXT
+            smsPacket.message = message;
+            smsPacket.address = address;
+            smsPacket.port = port;
+            smsPacket.sentAt = Long.fromNumber(Date.now());
+            smsPacket.messageType = 0; // GSM_TEXT
 
             return text.length;
         }
@@ -177,7 +178,7 @@ function(handle, type, host, destPort, sourcePort, message) {
             name: "new",
             data: {
               type: "websms/sms",
-              number: util.fromJavaString(host),
+              number: J2ME.fromJavaString(host),
               body: new TextDecoder('utf-16be').decode(message),
             },
         });

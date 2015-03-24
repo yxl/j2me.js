@@ -95,6 +95,13 @@ var currentlyFocusedTextEditor;
         MIDP.setFullScreen(d.fullScreen);
 
         asyncImpl("V", emoji.loadData());
+
+        if (profile === 2) {
+          // Use setTimeout to make sure our profiling enter/leave stack is not unpaired.
+          setTimeout(function () {
+            stopAndSaveTimeline();
+          }, 0);
+        }
     };
 
     Native["com/sun/midp/lcdui/DisplayDeviceAccess.vibrate0.(IZ)Z"] = function(displayId, on) {
@@ -254,7 +261,7 @@ var currentlyFocusedTextEditor;
         var imgdata = dataSource.context.getImageData(x, y, width, height);
         context.putImageData(imgdata, 0, 0);
 
-        dataDest.klass.classInfo.getField("I.isMutable.Z").set(dataDest, isMutable);
+        dataDest.isMutable = isMutable;
     };
 
     Native["javax/microedition/lcdui/ImageDataFactory.createImmutableImageDataCopy.(Ljavax/microedition/lcdui/ImageData;Ljavax/microedition/lcdui/ImageData;)V"] =
@@ -290,7 +297,7 @@ var currentlyFocusedTextEditor;
 
     Native["com/nokia/mid/ui/DirectUtils.makeMutable.(Ljavax/microedition/lcdui/Image;)V"] = function(image) {
         var imageData = image.imageData;
-        imageData.klass.classInfo.getField("I.isMutable.Z").set(imageData, 1);
+        imageData.isMutable = 1;
     };
 
     Native["com/nokia/mid/ui/DirectUtils.setPixels.(Ljavax/microedition/lcdui/Image;I)V"] = function(image, argb) {
@@ -351,8 +358,8 @@ var currentlyFocusedTextEditor;
         else
             face = "Arial,Helvetica,sans-serif";
 
-        this.klass.classInfo.getField("I.baseline.I").set(this, size | 0);
-        this.klass.classInfo.getField("I.height.I").set(this, (size * 1.3)|0);
+        this.baseline = size | 0;
+        this.height = (size * 1.3) | 0;
 
         // Note:
         // When a css string, such as ` 10 pt Arial, Helvetica`, is set to
@@ -383,8 +390,8 @@ var currentlyFocusedTextEditor;
         if (!defaultFont) {
             var classInfo = CLASSES.loadAndLinkClass("javax/microedition/lcdui/Font");
             defaultFont = new classInfo.klass();
-            var methodInfo = classInfo.getMethodByName("<init>", "(III)V", false);
-            jsGlobal[methodInfo.mangledClassAndMethodName].call(defaultFont, 0, 0, 0);
+            var methodInfo = classInfo.getMethodByNameString("<init>", "(III)V", false);
+            J2ME.getLinkedMethod(methodInfo).call(defaultFont, 0, 0, 0);
         }
         return defaultFont;
     }
@@ -394,7 +401,7 @@ var currentlyFocusedTextEditor;
     };
 
     Native["javax/microedition/lcdui/Font.stringWidth.(Ljava/lang/String;)I"] = function(str) {
-        return calcStringWidth(this, util.fromJavaString(str));
+        return calcStringWidth(this, J2ME.fromJavaString(str));
     };
 
     Native["javax/microedition/lcdui/Font.charWidth.(C)I"] = function(char) {
@@ -407,7 +414,7 @@ var currentlyFocusedTextEditor;
     };
 
     Native["javax/microedition/lcdui/Font.substringWidth.(Ljava/lang/String;II)I"] = function(str, offset, len) {
-        return calcStringWidth(this, util.fromJavaString(str).slice(offset, offset + len));
+        return calcStringWidth(this, J2ME.fromJavaString(str).slice(offset, offset + len));
     };
 
     var HCENTER = 1;
@@ -1062,12 +1069,12 @@ var currentlyFocusedTextEditor;
     }
 
     Native["javax/microedition/lcdui/Graphics.drawString.(Ljava/lang/String;III)V"] = function(str, x, y, anchor) {
-        drawString(this, util.fromJavaString(str), x, y, anchor, true);
+        drawString(this, J2ME.fromJavaString(str), x, y, anchor, true);
     };
 
     Native["javax/microedition/lcdui/Graphics.drawSubstring.(Ljava/lang/String;IIIII)V"] = 
     function(str, offset, len, x, y, anchor) {
-        drawString(this, util.fromJavaString(str).substr(offset, len), x, y, anchor, false);
+        drawString(this, J2ME.fromJavaString(str).substr(offset, len), x, y, anchor, false);
     };
 
     Native["javax/microedition/lcdui/Graphics.drawChars.([CIIIII)V"] = function(data, offset, len, x, y, anchor) {
@@ -1332,10 +1339,10 @@ var currentlyFocusedTextEditor;
         this.textEditor.setAttribute("maxlength", maxSize);
         this.textEditor.setSize(width, height);
         this.textEditor.setVisible(false);
-        var font = this.klass.classInfo.getField("I.font.Ljavax/microedition/lcdui/Font;").get(this);
+        var font = this.font;
         this.textEditor.setFont(font);
 
-        this.textEditor.setContent(util.fromJavaString(text));
+        this.textEditor.setContent(J2ME.fromJavaString(text));
         this.setCaretPosition(this.textEditor.getContentSize());
 
         this.textEditor.oninput(function(e) {
@@ -1357,7 +1364,7 @@ var currentlyFocusedTextEditor;
     };
 
     Native["javax/microedition/lcdui/Display.setTitle.(Ljava/lang/String;)V"] = function(title) {
-        document.getElementById("display_title").textContent = util.fromJavaString(title);
+        document.getElementById("display_title").textContent = J2ME.fromJavaString(title);
     };
 
     Native["com/nokia/mid/ui/CanvasItem.setSize.(II)V"] = function(width, height) {
@@ -1449,7 +1456,7 @@ var currentlyFocusedTextEditor;
     };
 
     Native["com/nokia/mid/ui/TextEditor.setContent.(Ljava/lang/String;)V"] = function(jStr) {
-        var str = util.fromJavaString(jStr);
+        var str = J2ME.fromJavaString(jStr);
         this.textEditor.setContent(str);
         this.setCaretPosition(this.textEditor.getContentSize());
     };
@@ -1462,7 +1469,7 @@ var currentlyFocusedTextEditor;
     };
 
     Native["com/nokia/mid/ui/TextEditor.insert.(Ljava/lang/String;I)V"] = function(jStr, pos) {
-        var str = util.fromJavaString(jStr);
+        var str = J2ME.fromJavaString(jStr);
         var len = util.toCodePointArray(str).length;
         if (this.textEditor.getContentSize() + len > this.textEditor.getAttribute("maxlength")) {
             throw $.newIllegalArgumentException();
@@ -1511,7 +1518,7 @@ var currentlyFocusedTextEditor;
     };
 
     Native["com/nokia/mid/ui/TextEditor.setFont.(Ljavax/microedition/lcdui/Font;)V"] = function(font) {
-        this.klass.classInfo.getField("I.font.Ljavax/microedition/lcdui/Font;").set(this, font);
+        this.font = font;
         this.textEditor.setFont(font);
     };
 
@@ -1547,7 +1554,7 @@ var currentlyFocusedTextEditor;
     };
 
     Native["javax/microedition/lcdui/DisplayableLFImpl.setTitle0.(ILjava/lang/String;)V"] = function(nativeId, title) {
-        document.getElementById("display_title").textContent = util.fromJavaString(title);
+        document.getElementById("display_title").textContent = J2ME.fromJavaString(title);
     };
 
     Native["javax/microedition/lcdui/CanvasLFImpl.createNativeResource0.(Ljava/lang/String;Ljava/lang/String;)I"] = function(title, ticker) {
@@ -1558,10 +1565,11 @@ var currentlyFocusedTextEditor;
 
     Native["javax/microedition/lcdui/AlertLFImpl.createNativeResource0.(Ljava/lang/String;Ljava/lang/String;I)I"] = function(title, ticker, type) {
         var nativeId = nextMidpDisplayableId++;
-        var el = document.getElementById("lcdui-alert").cloneNode(true);
+        var alertTemplateNode = document.getElementById("lcdui-alert");
+        var el = alertTemplateNode.cloneNode(true);
         el.id = "displayable-" + nativeId;
-        el.querySelector('h1.title').textContent = util.fromJavaString(title);
-        document.body.appendChild(el);
+        el.querySelector('h1.title').textContent = J2ME.fromJavaString(title);
+        alertTemplateNode.parentNode.appendChild(el);
 
         return nativeId;
     };
@@ -1569,7 +1577,7 @@ var currentlyFocusedTextEditor;
     Native["javax/microedition/lcdui/AlertLFImpl.setNativeContents0.(ILjavax/microedition/lcdui/ImageData;[ILjava/lang/String;)Z"] =
     function(nativeId, imgId, indicatorBounds, text) {
         var el = document.getElementById("displayable-" + nativeId);
-        el.querySelector('p.text').textContent = util.fromJavaString(text);
+        el.querySelector('p.text').textContent = J2ME.fromJavaString(text);
 
         return 0;
     };
@@ -1689,12 +1697,11 @@ var currentlyFocusedTextEditor;
         var validCommands = commands.filter(function(command) {
             return !!command;
         }).sort(function(a, b) {
-            return a.klass.classInfo.getField("I.priority.I").get(a) -
-                   b.klass.classInfo.getField("I.priority.I").get(b);
+            return a.priority - b.priority;
         });
 
         function sendEvent(command) {
-            MIDP.sendCommandEvent(command.klass.classInfo.getField("I.id.I").get(command));
+            MIDP.sendCommandEvent(command.id);
         }
 
         if (el) {
@@ -1705,9 +1712,9 @@ var currentlyFocusedTextEditor;
             validCommands.slice(0, 2).forEach(function(command, i) {
                 var button = el.querySelector(".button" + i);
                 button.style.display = 'inline';
-                button.textContent = util.fromJavaString(command.klass.classInfo.getField("I.shortLabel.Ljava/lang/String;").get(command));
+                button.textContent = J2ME.fromJavaString(command.shortLabel);
 
-                var commandType = command.klass.classInfo.getField("I.commandType.I").get(command);
+                var commandType = command.commandType;
                 if (numCommands == 1 || commandType == OK) {
                     button.classList.add('recommend');
                 } else if (commandType == CANCEL || commandType == BACK) {
@@ -1727,7 +1734,7 @@ var currentlyFocusedTextEditor;
 
             var isSidebarEmpty = true;
             validCommands.forEach(function(command) {
-                var commandType = command.klass.classInfo.getField("I.commandType.I").get(command);
+                var commandType = command.commandType;
                 // Skip the OK command which will shown in the header.
                 if (commandType == OK) {
                     okCommand = command;
@@ -1739,7 +1746,7 @@ var currentlyFocusedTextEditor;
                     return;
                 }
                 var li = document.createElement("li");
-                var text = util.fromJavaString(command.klass.classInfo.getField("I.shortLabel.Ljava/lang/String;").get(command));
+                var text = J2ME.fromJavaString(command.shortLabel);
                 var a = document.createElement("a");
                 a.textContent = text;
                 li.appendChild(a);

@@ -61,7 +61,7 @@ var stubProperties = {
 };
 
 Native["java/lang/System.getProperty0.(Ljava/lang/String;)Ljava/lang/String;"] = function(key) {
-    key = util.fromJavaString(key);
+    key = J2ME.fromJavaString(key);
     var value;
     switch (key) {
     case "microedition.encoding":
@@ -285,10 +285,10 @@ Native["java/lang/Class.getSuperclass.()Ljava/lang/Class;"] = function() {
 
 Native["java/lang/Class.invoke_clinit.()V"] = function() {
     var classInfo = this.runtimeKlass.templateKlass.classInfo;
-    var className = classInfo.className;
+    var className = classInfo.getClassNameSlow();
     var clinit = classInfo.staticInitializer;
-    if (clinit && clinit.classInfo.className === className) {
-        $.ctx.executeFrames([Frame.create(clinit, [], 0)]);
+    if (clinit && clinit.classInfo.getClassNameSlow() === className) {
+        $.ctx.executeFrame(Frame.create(clinit, [], 0));
     }
 };
 
@@ -301,7 +301,7 @@ Native["java/lang/Class.init9.()V"] = function() {
 };
 
 Native["java/lang/Class.getName.()Ljava/lang/String;"] = function() {
-    return J2ME.newString(this.runtimeKlass.templateKlass.classInfo.className.replace(/\//g, "."));
+    return J2ME.newString(this.runtimeKlass.templateKlass.classInfo.getClassNameSlow().replace(/\//g, "."));
 };
 
 Native["java/lang/Class.forName0.(Ljava/lang/String;)V"] = function(name) {
@@ -309,7 +309,7 @@ Native["java/lang/Class.forName0.(Ljava/lang/String;)V"] = function(name) {
   try {
     if (!name)
       throw new J2ME.ClassNotFoundException();
-    var className = util.fromJavaString(name).replace(/\./g, "/");
+    var className = J2ME.fromJavaString(name).replace(/\./g, "/");
     classInfo = CLASSES.getClass(className);
   } catch (e) {
     if (e instanceof (J2ME.ClassNotFoundException))
@@ -321,7 +321,7 @@ Native["java/lang/Class.forName0.(Ljava/lang/String;)V"] = function(name) {
 };
 
 Native["java/lang/Class.forName1.(Ljava/lang/String;)Ljava/lang/Class;"] = function(name) {
-  var className = util.fromJavaString(name).replace(/\./g, "/");
+  var className = J2ME.fromJavaString(name).replace(/\./g, "/");
   var classInfo = CLASSES.getClass(className);
   var classObject = classInfo.getClassObject();
   return classObject;
@@ -342,13 +342,11 @@ Native["java/lang/Class.newInstance0.()Ljava/lang/Object;"] = function() {
 
 Native["java/lang/Class.newInstance1.(Ljava/lang/Object;)V"] = function(o) {
   // The following can trigger an unwind.
-  var method = o.klass.classInfo.getLocalMethodByName("<init>", "()V", false);
-
-  if (!method) {
+  var methodInfo = o.klass.classInfo.getLocalMethodByNameString("<init>", "()V", false);
+  if (!methodInfo) {
     throw $.newInstantiationException("Can't instantiate classes without a nullary constructor");
   }
-
-  method.fn.call(o);
+  J2ME.getLinkedMethod(methodInfo).call(o);
 };
 
 Native["java/lang/Class.isInterface.()Z"] = function() {
@@ -416,7 +414,7 @@ Native["java/lang/Throwable.fillInStackTrace.()V"] = function() {
         if (!methodName)
             return;
         var classInfo = methodInfo.classInfo;
-        var className = classInfo.className;
+        var className = classInfo.getClassNameSlow();
         this.stackTrace.unshift({ className: className, methodName: methodName, methodSignature: methodInfo.signature, offset: frame.bci });
     }.bind(this));
 };
@@ -518,7 +516,7 @@ Native["java/lang/Thread.start0.()V"] = function() {
     newCtx.thread = this;
 
     var classInfo = CLASSES.getClass("org/mozilla/internal/Sys");
-    var run = classInfo.getMethodByName("runThread", "(Ljava/lang/Thread;)V", true);
+    var run = classInfo.getMethodByNameString("runThread", "(Ljava/lang/Thread;)V", true);
     newCtx.start([new Frame(run, [ this ], 0)]);
 }
 
@@ -545,7 +543,7 @@ Native["com/sun/cldchi/io/ConsoleOutputStream.write.(I)V"] = function(ch) {
 };
 
 Native["com/sun/cldc/io/ResourceInputStream.open.(Ljava/lang/String;)Ljava/lang/Object;"] = function(name) {
-    var fileName = util.fromJavaString(name);
+    var fileName = J2ME.fromJavaString(name);
     var data = JARStore.loadFile(fileName);
     var obj = null;
     if (data) {
@@ -563,23 +561,11 @@ Native["com/sun/cldc/io/ResourceInputStream.clone.(Ljava/lang/Object;)Ljava/lang
     return obj;
 };
 
-Override["com/sun/cldc/io/ResourceInputStream.available.()I"] = function() {
-    var handle = this.klass.classInfo.getField("I.fileDecoder.Ljava/lang/Object;").get(this);
-
-    if (!handle) {
-        throw $.newIOException();
-    }
-
+Native["com/sun/cldc/io/ResourceInputStream.bytesRemain.(Ljava/lang/Object;)I"] = function(handle) {
     return handle.data.length - handle.pos;
 };
 
-Override["com/sun/cldc/io/ResourceInputStream.read.()I"] = function() {
-    var handle = this.klass.classInfo.getField("I.fileDecoder.Ljava/lang/Object;").get(this);
-
-    if (!handle) {
-        throw $.newIOException();
-    }
-
+Native["com/sun/cldc/io/ResourceInputStream.readByte.(Ljava/lang/Object;)I"] = function(handle) {
     return (handle.data.length - handle.pos > 0) ? handle.data[handle.pos++] : -1;
 };
 
@@ -680,8 +666,7 @@ Native["com/sun/midp/links/LinkPortal.getLinks0.([Lcom/sun/midp/links/Link;)V"] 
     var isolateId = $.ctx.runtime.isolate.id;
 
     for (var i = 0; i < links[isolateId].length; i++) {
-        var nativePointer = links[isolateId][i].klass.classInfo.getField("I.nativePointer.I").get(links[isolateId][i]);
-        linkArray[i].klass.classInfo.getField("I.nativePointer.I").set(linkArray[i], nativePointer);
+        linkArray[i].nativePointer = links[isolateId][i].nativePointer;
         linkArray[i].sender = links[isolateId][i].sender;
         linkArray[i].receiver = links[isolateId][i].receiver;
     }
@@ -698,7 +683,7 @@ Native["com/sun/midp/links/LinkPortal.setLinks0.(I[Lcom/sun/midp/links/Link;)V"]
 Native["com/sun/midp/links/Link.init0.(II)V"] = function(sender, receiver) {
     this.sender = sender;
     this.receiver = receiver;
-    this.klass.classInfo.getField("I.nativePointer.I").set(this, util.id());
+    this.nativePointer = util.id();
 };
 
 Native["com/sun/midp/links/Link.receive0.(Lcom/sun/midp/links/LinkMessage;Lcom/sun/midp/links/Link;)V"] = function(linkMessage, link) {
@@ -726,7 +711,7 @@ Native["com/sun/cldc/i18n/j2me/UTF_8_Reader.readNative.([CII)I"] = function(cbuf
 };
 
 Native["java/io/DataOutputStream.UTFToBytes.(Ljava/lang/String;)[B"] = function(jStr) {
-    var str = util.fromJavaString(jStr);
+    var str = J2ME.fromJavaString(jStr);
 
     var utflen = 0;
 
@@ -847,8 +832,8 @@ Native["com/sun/cldc/i18n/j2me/UTF_8_Writer.sizeOf.([CII)I"] = function(cbuf, of
   var outputCount = 0;
   var count = 0;
   var localPendingSurrogate = this.pendingSurrogate;
-  while (count < length) {
-    inputChar = 0xffff & cbuf[offset + count];
+  while (count < len) {
+    inputChar = 0xffff & cbuf[off + count];
     if (0 != localPendingSurrogate) {
       if (0xdc00 <= inputChar && inputChar <= 0xdfff) {
         //000u uuuu xxxx xxxx xxxx xxxx
@@ -894,7 +879,7 @@ Native["com/sun/j2me/content/AppProxy.midletIsAdded.(ILjava/lang/String;)V"] = f
 };
 
 Native["com/nokia/mid/impl/jms/core/Launcher.handleContent.(Ljava/lang/String;)V"] = function(content) {
-    var fileName = util.fromJavaString(content);
+    var fileName = J2ME.fromJavaString(content);
 
     var ext = fileName.split('.').pop().toLowerCase();
     // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img#Supported_image_formats
@@ -930,16 +915,6 @@ Native["com/nokia/mid/impl/jms/core/Launcher.handleContent.(Ljava/lang/String;)V
             } else {
                 mask = document.createElement("div");
                 mask.id = maskId;
-                mask.style.position = "absolute";
-                mask.style.top = 0;
-                mask.style.left = 0;
-                mask.style.height = MIDP.context2D.canvas.height + "px";
-                mask.style.width = MIDP.context2D.canvas.width + "px";
-                mask.style.backgroundColor = "#000";
-                mask.style.backgroundPosition = "center center";
-                mask.style.backgroundRepeat = "no-repeat";
-                mask.style.backgroundSize = "contain";
-
                 mask.onclick = mask.ontouchstart = function() {
                     _revokeImageURL();
                     mask.parentNode.removeChild(mask);

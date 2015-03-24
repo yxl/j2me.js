@@ -42,7 +42,7 @@ Native["gnu/testlet/vm/NativeTest.nonStatic.(I)I"] = function(val) {
 };
 
 Native["gnu/testlet/vm/NativeTest.fromJavaString.(Ljava/lang/String;)I"] = function(str) {
-  return util.fromJavaString(str).length;
+  return J2ME.fromJavaString(str).length;
 };
 
 Native["gnu/testlet/vm/NativeTest.decodeUtf8.([B)I"] = function(str) {
@@ -91,7 +91,7 @@ Native["javax/microedition/lcdui/TestTextEditorFocus.isTextEditorReallyFocused.(
 };
 
 Native["gnu/testlet/TestHarness.getNumDifferingPixels.(Ljava/lang/String;)I"] = function(pathStr) {
-  var path = util.fromJavaString(pathStr);
+  var path = J2ME.fromJavaString(pathStr);
   asyncImpl("I", new Promise(function(resolve, reject) {
     var gotCanvas = document.getElementById("canvas");
     var gotPixels = new Uint32Array(gotCanvas.getContext("2d").getImageData(0, 0, gotCanvas.width, gotCanvas.height).data.buffer);
@@ -154,6 +154,11 @@ Native["javax/microedition/media/TestAudioRecorder.convert3gpToAmr.([B)[B"] = fu
   result.set(converted);
   return result;
 };
+
+Native["com/sun/midp/i18n/TestResourceConstants.setLanguage.(Ljava/lang/String;)V"] = function(language) {
+  MIDP.localizedStrings = null;
+  config.language = J2ME.fromJavaString(language);
+}
 
 // Many tests create FileConnection objects to files with the "/" root,
 // so add it to the list of valid roots.

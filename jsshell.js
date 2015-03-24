@@ -8,12 +8,27 @@
 
 if (typeof console === "undefined") {
   var console = {
-    log: print
+    log: print,
   }
 }
 
 console.print = function (c) {
   putstr(String.fromCharCode(c));
+};
+
+console.info = function (c) {
+  putstr(String.fromCharCode(c));
+};
+
+console.error = function (c) {
+  putstr(String.fromCharCode(c));
+};
+
+var START_TIME = dateNow();
+var performance = {
+  now: function () {
+    return dateNow();
+  }
 };
 
 function check() {
@@ -93,17 +108,22 @@ var config = {
   args: "",
 };
 
+var profileTimeline = false;
+
 try {
-  load("libs/relooper.js", "build/j2me.js","libs/zipfile.js", "blackBox.js",
+  if (profileTimeline) {
+    load("bld/shumway.js");
+  }
+  load("libs/relooper.js", "bld/j2me.js","libs/zipfile.js", "blackBox.js",
     "libs/encoding.js", "util.js", "libs/jarstore.js",
     "override.js", "native.js", "string.js", "tests/override.js",
     "midp/midp.js", "midp/gestures.js",
     "libs/long.js", "midp/crypto.js", "libs/forge/md5.js", "libs/forge/util.js",
-    "build/classes.jar.js");
+    "bld/classes.jar.js");
 
-  // load("build/classes.jar.js");
-  // load("build/program.jar.js");
-  // load("build/tests.jar.js");
+  // load("bld/classes.jar.js");
+  // load("bld/program.jar.js");
+  // load("bld/tests.jar.js");
 
   var dump = putstr;
 
@@ -121,21 +141,17 @@ try {
   var start = dateNow();
   var jvm = new JVM();
 
-  J2ME.writers = J2ME.WriterFlags.JIT;
-
-  print("INITIALIZATION TIME: " + (dateNow() - start));
-
+  J2ME.writers = J2ME.WriterFlags.None;
   start = dateNow();
   var runtime = jvm.startIsolate0(scriptArgs[0], config.args);
-
   while (callbacks.length) {
     (callbacks.shift())();
   }
-
-  print("RUNNING TIME: " + (dateNow() - start));
-
+  print("Time: " + (dateNow() - start).toFixed(4) + " ms");
+  if (profileTimeline) {
+    J2ME.timeline.createSnapshot().trace(new J2ME.IndentingWriter());
+  }
   // J2ME.interpreterCounter.traceSorted(new J2ME.IndentingWriter());
-
 } catch (x) {
   print(x);
   print(x.stack);
