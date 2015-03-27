@@ -538,7 +538,7 @@ Native["java/lang/Thread.start0.()V"] = function() {
 
     var classInfo = CLASSES.getClass("org/mozilla/internal/Sys");
     var run = classInfo.getMethodByNameString("runThread", "(Ljava/lang/Thread;)V", true);
-    newCtx.start([new Frame(run, [ this ], 0)]);
+    newCtx.start([Frame.create(run, [ this ], 0)]);
 }
 
 Native["java/lang/Thread.isAlive.()Z"] = function() {

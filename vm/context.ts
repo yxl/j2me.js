@@ -17,6 +17,8 @@ module J2ME {
   declare var VM;
   declare var setZeroTimeout;
 
+  export var t: number = 0;
+
   export enum WriterFlags {
     None  = 0x00,
     Trace = 0x01,
@@ -81,6 +83,7 @@ module J2ME {
     cp: any;
     localBase: number;
     lockObject: java.lang.Object;
+    id: number;
 
     static dirtyStack: Frame [] = [];
 
@@ -99,12 +102,13 @@ module J2ME {
     }
 
     constructor(methodInfo: MethodInfo, local: any [], localBase: number) {
-      frameCount ++;
       this.stack = [];
       this.reset(methodInfo, local, localBase);
     }
 
     reset(methodInfo: MethodInfo, local: any [], localBase: number) {
+      this.id = frameCount;
+      frameCount ++;
       this.methodInfo = methodInfo;
       this.cp = methodInfo ? methodInfo.classInfo.constantPool : null;
       this.code = methodInfo ? methodInfo.codeAttribute.code : null;
@@ -412,12 +416,22 @@ module J2ME {
 
     private popMarkerFrame() {
       var marker = this.frames.pop();
+      console.info("popMarkerFrame " + marker.id);
       release || assert (Frame.isMarker(marker));
     }
 
     executeFrame(frame: Frame) {
       var frames = this.frames;
       frames.push(Frame.Marker, frame);
+      if (frame.id == 621) {
+       console.error("executeFrame push " + frame.id);
+      } else {
+       console.info("executeFrame push " + frame.id);
+      }
+      if (frame.id == 621) {
+        console.error(Error().stack);
+        debugger;
+      }
 
       try {
         var returnValue = VM.execute();
@@ -425,6 +439,7 @@ module J2ME {
           // Prepend all frames up until the first marker to the bailout frames.
           while (true) {
             var frame = frames.pop();
+            console.info("executeFrame pop " + frame.id);
             if (Frame.isMarker(frame)) {
               break;
             }
@@ -434,9 +449,11 @@ module J2ME {
         }
       } catch (e) {
         this.popMarkerFrame();
+        console.warn("popMarkerFrame 1");
         throwHelper(e);
       }
       this.popMarkerFrame();
+      console.warn("popMarkerFrame 2");
       return returnValue;
     }
 
@@ -489,6 +506,9 @@ module J2ME {
         if (U) {
           if (this.bailoutFrames.length) {
             Array.prototype.push.apply(this.frames, this.bailoutFrames);
+            this.bailoutFrames.forEach(function(frame) {
+              console.error("execute bailoutFrames " + frame.id);
+            });
             this.bailoutFrames = [];
           }
           var frames = this.frames;
@@ -624,6 +644,10 @@ module J2ME {
       frame.opPC = pc;
       frame.lockObject = lockObject;
       this.bailoutFrames.unshift(frame);
+      console.error("bailout " + frame.id);
+      if (frame.id == 458) {
+        console.error(Error().stack);
+      }
     }
   }
 }

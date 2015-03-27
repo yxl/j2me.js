@@ -303,6 +303,16 @@ module J2ME {
 
         lastPC = frame.opPC = frame.pc;
         var op: Bytecodes = frame.read8();
+        if (frame.id == 578 && frame.id <= 620) {
+          if (lastPC == 16) {
+            console.error(frame.id + " " + lastPC);
+            debugger;
+          } else {
+            console.info(frame.id + " " + lastPC);
+          }
+          //console.warn("local " + frame.local.length);
+          //console.info("stack length " + stack.length);
+        }
 
         switch (op) {
           case Bytecodes.NOP:
