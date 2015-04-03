@@ -36,32 +36,6 @@ module J2ME {
    */
   export var writers = WriterFlags.None;
 
-  Array.prototype.push2 = function(value) {
-    this.push(value);
-    this.push(null);
-    return value;
-  }
-
-  Array.prototype.pop2 = function() {
-    this.pop();
-    return this.pop();
-  }
-
-  Array.prototype.pushKind = function(kind: Kind, value) {
-    if (isTwoSlot(kind)) {
-      this.push2(value);
-      return;
-    }
-    this.push(value);
-  }
-
-  Array.prototype.popKind = function(kind: Kind) {
-    if (isTwoSlot(kind)) {
-      return this.pop2();
-    }
-    return this.pop();
-  }
-
   // A convenience function for retrieving values in reverse order
   // from the end of the stack.  stack.read(1) returns the topmost item
   // on the stack, while stack.read(2) returns the one underneath it.
