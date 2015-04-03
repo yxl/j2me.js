@@ -109,9 +109,14 @@ module J2ME {
       this.methodInfo = methodInfo;
       this.cp = methodInfo ? methodInfo.classInfo.constantPool : null;
       this.code = methodInfo ? methodInfo.codeAttribute.code : null;
+      var max_stack = methodInfo ? methodInfo.codeAttribute.max_stack : 0;
       this.pc = 0;
       this.opPC = 0;
       this.stack = {};
+      var stack = this.stack;
+      for (var i = 0; i < max_stack; i++) {
+        stack[i] = null;
+      }
       this.sp = this.spBase = 0;
       this.local = local;
       this.lockObject = null;
