@@ -166,6 +166,7 @@ module J2ME {
 
         return;
       }
+      frame.free();
       frames.pop();
       frame = frames[frames.length - 1];
       if (Frame.isMarker(frame)) {
