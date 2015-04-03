@@ -1273,7 +1273,8 @@ module J2ME {
     // Adapter for the most common case.
     if (!methodInfo.isSynchronized && !methodInfo.hasTwoSlotArguments) {
       var method = function fastInterpreterFrameAdapter() {
-        var frame = Frame.create(methodInfo, []);
+        var ctx = $.ctx;
+        var frame = Frame.create(methodInfo, [], ctx.bailoutStack);
         var j = 0;
         if (!methodInfo.isStatic) {
           frame.local[j++] = this;
@@ -1282,14 +1283,15 @@ module J2ME {
         for (var i = 0; i < slots; i++) {
           frame.local[j++] = arguments[i];
         }
-        return $.ctx.executeFrame(frame);
+        return ctx.executeFrame(frame);
       };
       (<any>method).methodInfo = methodInfo;
       return method;
     }
 
     var method = function interpreterFrameAdapter() {
-      var frame = Frame.create(methodInfo, []);
+      var ctx = $.ctx;
+      var frame = Frame.create(methodInfo, [], ctx.bailoutStack);
       var j = 0;
       if (!methodInfo.isStatic) {
         frame.local[j++] = this;
@@ -1309,9 +1311,9 @@ module J2ME {
             ? methodInfo.classInfo.getClassObject()
             : frame.local[0];
         }
-        $.ctx.monitorEnter(frame.lockObject);
+        ctx.monitorEnter(frame.lockObject);
         if (U === VMState.Pausing) {
-          $.ctx.frames.push(frame);
+          ctx.frames.push(frame);
           return;
         }
       }
