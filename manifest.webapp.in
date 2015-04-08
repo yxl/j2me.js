@@ -1,15 +1,15 @@
 {
-  "name": "j2me.js-wc",
-  "description": "J2ME Emulator",
+  "name": "@NAME@",
+  "description": "@DESCRIPTION@",
   "launch_path": "/index.html",
-  "origin": "app://wechatinj2mejs.mozilla.org",
-  "version": "1.0",
+  "origin": "@ORIGIN@",
+  "version": "@VERSION@",
   "icons": {
     "128": "/img/icon-128.png",
     "512": "/img/icon-512.png"
   },
   "developer": {
-    "name": "Mozilla",
+    "name": "Mozilla Apps",
     "url": "http://mozilla.org"
   },
   "default_locale": "en",

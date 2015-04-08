@@ -4,7 +4,7 @@
 */
 
 module J2ME {
-  declare var util;
+  declare var util, Native;
   import assert = J2ME.Debug.assert;
   import concat3 = StringUtilities.concat3;
   import pushMany = ArrayUtilities.pushMany;
@@ -543,13 +543,16 @@ module J2ME {
             var name = this.resolveUtf8(name_index);
             var type = this.resolveUtf8(type_index);
             if (tag === TAGS.CONSTANT_Fieldref) {
-              r = this.resolved[i] = classInfo.getFieldByName(name, type, isStatic);
+              r = classInfo.getFieldByName(name, type, isStatic);
             } else {
-              r = this.resolved[i] = classInfo.getMethodByName(name, type);
+              r = classInfo.getMethodByName(name, type);
             }
             if (!r) {
               throw $.newRuntimeException(classInfo.getClassNameSlow() + "." + fromUTF8(name) + "." + fromUTF8(type) + " not found");
             }
+            // Set the method/field as resolved only if it was actually found, otherwise a new attempt to
+            // resolve this method/field will not fail with a RuntimeException.
+            this.resolved[i] = r;
             break;
           default:
             assert(false);
@@ -801,6 +804,11 @@ module J2ME {
     }
 
     get isNative(): boolean {
+      if (!release) {
+        if (Native[this.implKey]) {
+          return true;
+        }
+      }
       return !!(this.accessFlags & ACCESS_FLAGS.ACC_NATIVE);
     }
 
