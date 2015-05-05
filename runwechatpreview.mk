@@ -6,6 +6,7 @@ CONFIG=config/runwechatpreview.js
 PACKAGE_DIR=runwechatpreview
 
 NAME = RunWeChat (Preview)
+MIDLET_NAME = WeChat
 DESCRIPTION = an environment optimized for WeChat to run on Firefox OS
 ORIGIN = app://runwechatpreview.mozilla.org
 
