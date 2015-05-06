@@ -270,6 +270,7 @@ DumbPipe.registerOpener("audiorecorder", function(message, sender) {
 
         mediaRecorder.ondataavailable = function(e) {
             if (e.data.size == 0) {
+                console.warn("audiorecorder data size is 0.");
                 return;
             }
 
@@ -298,11 +299,11 @@ DumbPipe.registerOpener("audiorecorder", function(message, sender) {
             sender({ type: "pause" });
         };
 
-        mediaRecorder.onstart = function(e) {
-            sender({ type: "start" });
-        };
-
         mediaRecorder.start();
+        // MediaRecorder.start event is not raised on Firefox OS 2.0 devices as
+        // expected, and we have to work around that by sending `start` message
+        // unconditionally.
+        sender({ type: "start" });
     }
 
     return function(message) {
@@ -310,7 +311,10 @@ DumbPipe.registerOpener("audiorecorder", function(message, sender) {
             case "start":
                 try {
                     if (!mediaRecorder) {
-                        navigator.mozGetUserMedia({
+                        if (typeof navigator.getUserMedia === "undefined") {
+                          navigator.getUserMedia = navigator.mozGetUserMedia;
+                        }
+                        navigator.getUserMedia({
                             audio: true
                         }, function(localStream) {
                             startRecording(localStream);

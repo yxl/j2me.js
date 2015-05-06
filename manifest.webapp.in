@@ -36,6 +36,9 @@
     "audio-capture": {
        "description": "Required to capture audio via getUserMedia"
     },
+    "audio-capture:3gpp": {
+       "description": "Required to capture 3gpp audio via getUserMedia"
+    },
     "video-capture": {
        "description": "Required to take pictures"
     },
